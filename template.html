@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RMIS — Programme PIP MLI 1159</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Libraries via CDN — load order matters: PropTypes before Recharts -->
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.4/babel.min.js"></script>
+  <!-- Fallbacks to unpkg if cdnjs fails (some corporate networks block cdnjs) -->
+  <script>
+    window.addEventListener('load', function() {
+      var missing = [];
+      if (typeof React === 'undefined') missing.push('React');
+      if (typeof ReactDOM === 'undefined') missing.push('ReactDOM');
+      if (typeof PropTypes === 'undefined') missing.push('PropTypes');
+      if (typeof Recharts === 'undefined') missing.push('Recharts');
+      if (typeof Babel === 'undefined') missing.push('Babel');
+      if (missing.length) {
+        setTimeout(function() {
+          var root = document.getElementById('root');
+          if (root && root.querySelector('#loading')) {
+            root.innerHTML = '<div style="max-width:600px;margin:80px auto;padding:24px;font-family:system-ui,sans-serif;"><h2 style="color:#B5362A;">Chargement incomplet</h2><p>Les bibliothèques suivantes n\'ont pas pu être chargées : <strong>' + missing.join(', ') + '</strong></p><p>Vérifiez votre connexion internet, ou ouvrez ce fichier depuis un autre réseau (votre pare-feu bloque peut-être cdnjs.cloudflare.com).</p></div>';
+          }
+        }, 8000);
+      }
+    });
+  </script>
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: #FBFAF6; color: #1A1A17; }
+    .font-display { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; }
+    .font-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .max-w-7xl { max-width: 80rem; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+    .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+    .py-5 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+    .pt-2 { padding-top: 0.5rem; }
+    .pb-20 { padding-bottom: 5rem; }
+    .flex { display: flex; }
+    .items-center { align-items: center; }
+    .items-baseline { align-items: baseline; }
+    .items-start { align-items: flex-start; }
+    .justify-between { justify-content: space-between; }
+    .justify-center { justify-content: center; }
+
+    select.filt-sel {
+      appearance: none;
+      background-color: white;
+      border: 1px solid #E0DED6;
+      padding: 6px 28px 6px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: inherit;
+      color: #1A1A17;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%235A5A54' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+
+    button.chip, button.chip-a {
+      background: white;
+      border: 1px solid #E0DED6;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      color: #5A5A54;
+      transition: all 0.15s;
+    }
+    button.chip:hover { border-color: #2FAB15; color: #1A1A17; }
+    button.chip-a { background: #2FAB15; color: white; border-color: #2FAB15; font-weight: 500; }
+
+    .recharts-tooltip-wrapper { outline: none !important; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #D6D3C9; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #B5B1A3; }
+
+    /* Initial loading state */
+    #loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 16px; }
+    #loading .sp { width: 32px; height: 32px; border: 3px solid #E0DED6; border-top-color: #2FAB15; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="loading">
+      <div class="sp"></div>
+      <div style="font-family: 'Fraunces', serif; font-size: 18px; color: #1A1A17;">Chargement du tableau de bord RMIS…</div>
+      <div style="font-size: 12px; color: #5A5A54;">Welthungerhilfe · Programme PIP · MLI 1159</div>
+    </div>
+  </div>
+
+  <!-- Embedded data -->
+  <script>
+    const WHH_LOGO = "__LOGO_B64__";
+    const DATA = __DATA_JSON__;
+    const PHOTOS = __PHOTOS_JSON__;
+  </script>
+
+  <!-- React component -->
+  <script type="text/babel" data-presets="react">
+
+const { useState, useMemo, useEffect } = React;
+const { ScatterChart, Scatter, BarChart, Bar, PieChart, Pie,
+        XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+        Cell, ReferenceArea } = Recharts;
+
+// ============= BRAND =============
+const B = {
+  green: '#2FAB15', greenDark: '#1F7A0E', greenDeep: '#134708',
+  greenTint: '#E8F7E3', greenTintDeep: '#C9ECB8',
+  paper: '#FBFAF6', paperDeep: '#F4F2EA',
+  ink: '#1A1A17', inkMuted: '#5A5A54',
+  line: '#E0DED6', lineLight: '#EDEBE3',
+  amber: '#B8820C', amberTint: '#FAF1D9',
+  red: '#B5362A', redTint: '#F5DDD8',
+};
+
+// ============= TYPE META =============
+const TYPE_META = {
+  perimetre_maraicher:   { label: "Périmètre maraîcher",      short: "Maraîchage",        color: '#4CA82E', emoji: '🌱' },
+  unite_transfo:         { label: "Unité de transformation", short: "Transformation",    color: '#D98B2B', emoji: '⚙️' },
+  piste:                 { label: "Piste",                    short: "Piste",             color: '#7B5B3F', emoji: '🛣️' },
+  magasin:               { label: "Magasin de stockage",     short: "Magasin",           color: '#9E6BB5', emoji: '🏚️' },
+  marche:                { label: "Marché",                   short: "Marché",            color: '#D54C4C', emoji: '🏪' },
+  parc_vaccin:           { label: "Parc de vaccination",     short: "Parc vaccin.",      color: '#3B87B8', emoji: '🩺' },
+  autres_infrastructure: { label: "Autre infrastructure",    short: "Autre",             color: '#7A7668', emoji: '🏗️' },
+};
+
+const prettyCommune = s => (s||'').replace(/_/g,' ').replace('commune urbaine ','').replace(/\b\w/g,c=>c.toUpperCase());
+const prettyCercle  = s => (s||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+const prettyRegion  = s => (s||'').replace(/\b\w/g,c=>c.toUpperCase());
+const prettyName    = s => (s||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+
+// ============= ICONS (inline SVG) =============
+const Icon = ({name, size=16, color='currentColor', style={}}) => {
+  const paths = {
+    building:  <React.Fragment><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/></React.Fragment>,
+    map:       <React.Fragment><path d="M3 7l6-3 6 3 6-3v15l-6 3-6-3-6 3V7z"/><path d="M9 4v15M15 7v15"/></React.Fragment>,
+    pin:       <React.Fragment><path d="M12 22s-8-7.58-8-13a8 8 0 1 1 16 0c0 5.42-8 13-8 13z"/><circle cx="12" cy="9" r="2.5"/></React.Fragment>,
+    camera:    <React.Fragment><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></React.Fragment>,
+    calendar:  <React.Fragment><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></React.Fragment>,
+    users:     <React.Fragment><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></React.Fragment>,
+    check:     <React.Fragment><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></React.Fragment>,
+    alert:     <React.Fragment><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></React.Fragment>,
+    filter:    <React.Fragment><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></React.Fragment>,
+    chevron:   <React.Fragment><polyline points="9 18 15 12 9 6"/></React.Fragment>,
+    close:     <React.Fragment><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></React.Fragment>,
+    arrow:     <React.Fragment><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></React.Fragment>,
+    sprout:    <React.Fragment><path d="M7 20h10M12 20V9M12 9c0-3 3-6 6-6 0 3-3 6-6 6zM12 9c0-3-3-6-6-6 0 3 3 6 6 6z"/></React.Fragment>,
+    route:     <React.Fragment><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></React.Fragment>,
+    store:     <React.Fragment><path d="M3 9l2-5h14l2 5M3 9v11h18V9M3 9h18"/></React.Fragment>,
+    package:   <React.Fragment><path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></React.Fragment>,
+    warehouse: <React.Fragment><path d="M3 21V10l9-5 9 5v11M7 21V14h10v7"/></React.Fragment>,
+    syringe:   <React.Fragment><path d="m18 2 4 4M11 9l-3 3M15 5l4 4M10 14l-6 6M5 21l-1-1M8 18l2 2"/></React.Fragment>,
+    layers:    <React.Fragment><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></React.Fragment>,
+  };
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+         fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+      {paths[name]}
+    </svg>
+  );
+};
+
+const TYPE_ICON = {
+  perimetre_maraicher: 'sprout',
+  unite_transfo: 'package',
+  piste: 'route',
+  magasin: 'warehouse',
+  marche: 'store',
+  parc_vaccin: 'syringe',
+  autres_infrastructure: 'building',
+};
+
+// Helper: get photos for a mission ID_gen
+const photosFor = (idGen) => PHOTOS[idGen] || [];
+// Helper: mission list for an infra caseid
+const missionsFor = (caseid) => DATA.missions.filter(m => m.parent_caseid === caseid);
+
+// ============= MAIN APP =============
+function App() {
+  const [tab, setTab] = useState('overview');
+  const [lightbox, setLightbox] = useState(null); // {src, caption}
+  const [selectedInfra, setSelectedInfra] = useState(null);
+  const [missionFilter, setMissionFilter] = useState('all');
+
+  return (
+    <div style={{background: B.paper, color: B.ink, minHeight: '100vh',
+                 fontFamily: "'IBM Plex Sans', system-ui, sans-serif"}}>
+      <Header />
+      <PhaseBanner />
+      <div className="max-w-7xl mx-auto px-6">
+        <TabBar tab={tab} setTab={setTab} />
+      </div>
+      <div className="max-w-7xl mx-auto px-6 pt-2 pb-20">
+        {tab === 'overview' && <OverviewTab setTab={setTab} setLightbox={setLightbox} setSelectedInfra={setSelectedInfra} />}
+        {tab === 'map' && <MapTab setLightbox={setLightbox} />}
+        {tab === 'portfolio' && <PortfolioTab setLightbox={setLightbox} selectedInfra={selectedInfra} setSelectedInfra={setSelectedInfra} />}
+        {tab === 'visits' && <VisitsTab setLightbox={setLightbox} filter={missionFilter} setFilter={setMissionFilter} />}
+      </div>
+      <Footer />
+      {lightbox && <Lightbox {...lightbox} onClose={() => setLightbox(null)} />}
+    </div>
+  );
+}
+
+// ============= HEADER =============
+function Header() {
+  return (
+    <header style={{borderBottom: `1px solid ${B.line}`, background: B.paper}}>
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center" style={{gap: 16}}>
+          <img src={`data:image/png;base64,${WHH_LOGO}`} alt="Welthungerhilfe" style={{height: 48}} />
+          <div style={{width: 1, height: 40, background: B.line}} />
+          <div>
+            <div className="font-display" style={{fontSize: 20, color: B.ink, letterSpacing: '-0.01em', lineHeight: 1.1, fontWeight: 600}}>
+              Programme PIP — MLI 1159
+            </div>
+            <div className="font-mono" style={{fontSize: 11, color: B.inkMuted, letterSpacing: '0.04em', marginTop: 2}}>
+              RMIS · SUIVI & ÉVALUATION · MALI
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center" style={{gap: 24, fontSize: 12, color: B.inkMuted}}>
+          <div className="flex items-center" style={{gap: 8}}>
+            <div style={{width: 6, height: 6, borderRadius: '50%', background: B.green}} />
+            Données CommCare HQ · serveur EU
+          </div>
+          <div className="font-mono">Avril 2026</div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ============= PHASE BANNER =============
+function PhaseBanner() {
+  return (
+    <div style={{background: B.greenTint, borderBottom: `1px solid ${B.greenTintDeep}`}}>
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div>
+          <div className="font-display" style={{fontSize: 24, color: B.greenDeep, letterSpacing: '-0.015em', lineHeight: 1.15, fontWeight: 600}}>
+            Phase de référence — documentation avant travaux
+          </div>
+          <div style={{color: B.greenDark, fontSize: 13, marginTop: 4, maxWidth: 720}}>
+            15 sites catalogués · 16 visites de terrain réalisées · 14 photos documentaires collectées. 
+            Démarrage des travaux prévu à l'issue de l'approbation finale des dossiers par les autorités locales.
+          </div>
+        </div>
+        <PhaseTimeline />
+      </div>
+    </div>
+  );
+}
+
+function PhaseTimeline() {
+  const phases = [
+    {label: 'Référence', active: true},
+    {label: 'ANO', active: true, current: true},
+    {label: 'Travaux', active: false},
+    {label: 'Réception', active: false},
+    {label: 'Clôture', active: false},
+  ];
+  return (
+    <div className="flex items-center" style={{gap: 4}}>
+      {phases.map((p, i) => (
+        <React.Fragment key={p.label}>
+          <div className="text-center" style={{minWidth: 68}}>
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%', margin: '0 auto 6px',
+              background: p.active ? B.green : 'white',
+              border: `2px solid ${p.active ? B.greenDark : B.line}`,
+              boxShadow: p.current ? `0 0 0 4px ${B.greenTintDeep}` : 'none',
+            }} />
+            <div className="font-mono" style={{fontSize: 10, color: p.active ? B.greenDark : B.inkMuted, letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: p.current ? 700 : 500}}>
+              {p.label}
+            </div>
+          </div>
+          {i < phases.length - 1 && <div style={{height: 1, width: 16, background: phases[i+1].active ? B.greenDark : B.line}} />}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ============= TAB BAR =============
+function TabBar({tab, setTab}) {
+  const tabs = [
+    {id: 'overview', label: "Vue d'ensemble"},
+    {id: 'map', label: "Carte"},
+    {id: 'portfolio', label: "Les 15 infrastructures"},
+    {id: 'visits', label: "Visites terrain & photos"},
+  ];
+  return (
+    <div className="flex" style={{gap: 32, borderBottom: `1px solid ${B.line}`, marginTop: 8}}>
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          onClick={() => setTab(t.id)}
+          style={{
+            paddingBottom: 14, paddingTop: 6,
+            fontSize: 14, fontWeight: 500,
+            background: 'none', border: 'none', borderBottom: '2px solid',
+            marginBottom: -1, cursor: 'pointer',
+            color: tab === t.id ? B.ink : B.inkMuted,
+            borderColor: tab === t.id ? B.green : 'transparent',
+            transition: 'color 0.15s, border-color 0.15s',
+          }}
+          onMouseEnter={e => {if (tab !== t.id) { e.currentTarget.style.color = B.ink; e.currentTarget.style.borderColor = B.line; }}}
+          onMouseLeave={e => {if (tab !== t.id) { e.currentTarget.style.color = B.inkMuted; e.currentTarget.style.borderColor = 'transparent'; }}}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============= PANEL =============
+function Panel({title, subtitle, children, style={}}) {
+  return (
+    <div style={{background: 'white', border: `1px solid ${B.line}`, borderRadius: 6, padding: 20, ...style}}>
+      {title && (
+        <div style={{marginBottom: subtitle ? 2 : 12}}>
+          <div className="font-display" style={{fontSize: 17, color: B.ink, fontWeight: 600, letterSpacing: '-0.005em'}}>{title}</div>
+          {subtitle && <div style={{fontSize: 12, color: B.inkMuted, marginTop: 2}}>{subtitle}</div>}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// ============= KPI =============
+function KPI({label, value, sublabel, color}) {
+  return (
+    <div style={{
+      background: 'white', border: `1px solid ${B.line}`, borderRadius: 6,
+      borderTop: `3px solid ${color || B.green}`, padding: '16px 20px',
+    }}>
+      <div style={{fontSize: 11, color: B.inkMuted, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500}}>{label}</div>
+      <div className="font-display" style={{fontSize: 40, color: B.ink, lineHeight: 1, marginTop: 8, letterSpacing: '-0.02em', fontWeight: 600}}>
+        {value}
+      </div>
+      {sublabel && <div style={{fontSize: 12, color: B.inkMuted, marginTop: 6}}>{sublabel}</div>}
+    </div>
+  );
+}
+
+// ============= OVERVIEW TAB =============
+function OverviewTab({setTab, setLightbox, setSelectedInfra}) {
+  const infras = DATA.infrastructures;
+  const missions = DATA.missions;
+  const uniqueCommunes = new Set(infras.map(r => r.commune)).size;
+  const photoCount = Object.values(PHOTOS).reduce((s, arr) => s + arr.length, 0);
+  const approved = missions.filter(m => m.statut_mission === 'approuvee').length;
+
+  // Type distribution
+  const typeCounts = infras.reduce((a, r) => { a[r.type_infrastructure] = (a[r.type_infrastructure]||0)+1; return a; }, {});
+  const typeData = Object.entries(typeCounts)
+    .map(([k, v]) => ({key: k, name: TYPE_META[k]?.label, short: TYPE_META[k]?.short, count: v, color: TYPE_META[k]?.color}))
+    .sort((a, b) => b.count - a.count);
+
+  return (
+    <div style={{display: 'grid', gap: 16}}>
+      {/* KPIs */}
+      <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12}}>
+        <KPI label="Infrastructures" value={infras.length} sublabel="sites identifiés et géolocalisés" />
+        <KPI label="Communes couvertes" value={uniqueCommunes} sublabel="dans les régions de Kayes et Kita" />
+        <KPI label="Visites terrain" value={missions.length} sublabel={`${approved} approuvées · ${missions.length - approved} en vérification`} />
+        <KPI label="Photos documentaires" value={photoCount} sublabel={`de ${Object.keys(PHOTOS).length} visites différentes`} />
+      </div>
+
+      {/* Type distribution — pie + bar */}
+      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16}}>
+        <Panel title="Répartition par type d'ouvrage" subtitle="Proportion sur les 15 infrastructures">
+          <div style={{display: 'flex', alignItems: 'center', gap: 16, marginTop: 8}}>
+            <div style={{flexShrink: 0}}>
+              <ResponsiveContainer width={220} height={220}>
+                <PieChart>
+                  <Pie data={typeData} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={100} paddingAngle={2} stroke="white" strokeWidth={2}>
+                    {typeData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v, n) => [v, n]} contentStyle={{background: 'white', border: `1px solid ${B.line}`, borderRadius: 4, fontSize: 12}} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{flex: 1, display: 'grid', gap: 8}}>
+              {typeData.map(d => {
+                const pct = (d.count / infras.length) * 100;
+                return (
+                  <div key={d.key} style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                    <div style={{width: 10, height: 10, borderRadius: 2, background: d.color, flexShrink: 0}} />
+                    <div style={{flex: 1, fontSize: 12, color: B.ink}}>{d.name}</div>
+                    <div className="font-mono" style={{fontSize: 12, color: B.ink, fontWeight: 600}}>{d.count}</div>
+                    <div className="font-mono" style={{fontSize: 11, color: B.inkMuted, width: 40, textAlign: 'right'}}>{pct.toFixed(0)}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Décompte par type" subtitle="Nombre d'ouvrages par catégorie">
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={typeData} layout="vertical" margin={{top: 10, right: 30, bottom: 0, left: 10}}>
+              <CartesianGrid strokeDasharray="2 4" stroke={B.line} horizontal={false} />
+              <XAxis type="number" tick={{fill: B.inkMuted, fontSize: 11}} axisLine={{stroke: B.line}} tickLine={false} allowDecimals={false} />
+              <YAxis dataKey="short" type="category" tick={{fill: B.ink, fontSize: 11}} axisLine={false} tickLine={false} width={100} />
+              <Tooltip cursor={{fill: B.greenTint, opacity: 0.3}} contentStyle={{background: 'white', border: `1px solid ${B.line}`, borderRadius: 4, fontSize: 12}}
+                       formatter={(v) => [v + ' ouvrage' + (v > 1 ? 's' : ''), 'Nombre']} />
+              <Bar dataKey="count" radius={[0, 3, 3, 0]}>
+                {typeData.map((d, i) => <Cell key={i} fill={d.color} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
+
+      {/* Portefeuille preview + map preview */}
+      <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16}}>
+        <Panel title="Aperçu des 15 infrastructures" subtitle="Classées par date d'enregistrement — voir l'onglet « Les 15 infrastructures » pour la vue complète">
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 10}}>
+            {infras.slice(0, 6).map(r => <InfraMiniCard key={r.caseid} infra={r} onClick={() => { setSelectedInfra(r.caseid); setTab('portfolio'); }} />)}
+          </div>
+          <button onClick={() => setTab('portfolio')}
+                  style={{marginTop: 14, background: 'none', border: `1px solid ${B.line}`, padding: '8px 16px', borderRadius: 4, fontSize: 13, color: B.ink, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8}}
+                  onMouseEnter={e => e.currentTarget.style.background = B.greenTint}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            Voir les {infras.length} infrastructures <Icon name="arrow" size={14} />
+          </button>
+        </Panel>
+
+        <Panel title="Couverture géographique" subtitle="Répartition administrative">
+          <div style={{marginTop: 12, display: 'grid', gap: 10}}>
+            {['kayes', 'kita'].map(reg => {
+              const count = infras.filter(i => i.region === reg).length;
+              const cercles = [...new Set(infras.filter(i => i.region === reg).map(i => i.cercle))];
+              const communes = [...new Set(infras.filter(i => i.region === reg).map(i => i.commune))];
+              return (
+                <div key={reg} style={{padding: 12, border: `1px solid ${B.line}`, borderRadius: 4, background: B.paperDeep}}>
+                  <div style={{display: 'flex', alignItems: 'baseline', justifyContent: 'space-between'}}>
+                    <div className="font-display" style={{fontSize: 15, fontWeight: 600, color: B.ink}}>Région de {prettyRegion(reg)}</div>
+                    <div className="font-mono" style={{fontSize: 18, color: B.green, fontWeight: 600}}>{count}</div>
+                  </div>
+                  <div style={{fontSize: 11, color: B.inkMuted, marginTop: 4}}>
+                    {cercles.length} cercle{cercles.length > 1 ? 's' : ''} · {communes.length} commune{communes.length > 1 ? 's' : ''}
+                  </div>
+                  <div style={{fontSize: 11, color: B.inkMuted, marginTop: 2}}>
+                    {cercles.map(prettyCercle).join(' · ')}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Note about execution indicators */}
+      <div style={{background: B.paperDeep, border: `1px solid ${B.line}`, borderRadius: 6, padding: 16, display: 'flex', alignItems: 'flex-start', gap: 12}}>
+        <Icon name="alert" size={18} color={B.amber} style={{flexShrink: 0, marginTop: 2}} />
+        <div style={{fontSize: 13, color: B.ink, lineHeight: 1.5}}>
+          <strong style={{fontWeight: 600}}>Note pour les partenaires.</strong> Les indicateurs d'exécution 
+          (jours HIMO hommes/femmes, pourcentage d'avancement physique des travaux) 
+          seront renseignés dans le système à chaque visite dès le démarrage effectif des travaux.
+          La phase actuelle consiste à documenter l'état initial de chaque site <em>avant</em> construction.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfraMiniCard({infra, onClick}) {
+  const meta = TYPE_META[infra.type_infrastructure];
+  const missions = missionsFor(infra.caseid);
+  const photoCount = missions.reduce((s, m) => s + photosFor(m.ID_gen).length, 0);
+  return (
+    <div onClick={onClick} style={{
+      padding: 12, border: `1px solid ${B.line}`, borderRadius: 4,
+      cursor: 'pointer', transition: 'all 0.15s', background: 'white',
+    }}
+    onMouseEnter={e => { e.currentTarget.style.borderColor = B.green; e.currentTarget.style.background = B.greenTint; }}
+    onMouseLeave={e => { e.currentTarget.style.borderColor = B.line; e.currentTarget.style.background = 'white'; }}>
+      <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+        <div style={{width: 26, height: 26, borderRadius: 4, background: meta.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+          <Icon name={TYPE_ICON[infra.type_infrastructure]} size={14} color={meta.color} />
+        </div>
+        <div style={{flex: 1, minWidth: 0}}>
+          <div className="font-mono" style={{fontSize: 11, color: B.ink, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{infra.name}</div>
+          <div style={{fontSize: 10, color: B.inkMuted}}>{meta.short}</div>
+        </div>
+      </div>
+      <div style={{display: 'flex', gap: 10, marginTop: 8, fontSize: 11, color: B.inkMuted}}>
+        <div>{prettyCommune(infra.commune)}</div>
+        <div style={{marginLeft: 'auto', display: 'flex', gap: 8}}>
+          <span style={{color: missions.length ? B.green : B.inkMuted}}>{missions.length} visite{missions.length > 1 ? 's' : ''}</span>
+          {photoCount > 0 && <span style={{color: B.inkMuted}}><Icon name="camera" size={10} style={{display: 'inline', verticalAlign: -1, marginRight: 2}} />{photoCount}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============= MAP TAB =============
+function MapTab({setLightbox}) {
+  const [hoveredId, setHoveredId] = useState(null);
+  const [clickedInfra, setClickedInfra] = useState(null);
+
+  const infras = DATA.infrastructures.filter(i => i.lat && i.lon);
+  const points = infras.map(r => ({
+    ...r, 
+    missionCount: missionsFor(r.caseid).length,
+    photoCount: missionsFor(r.caseid).reduce((s, m) => s + photosFor(m.ID_gen).length, 0),
+  }));
+  const grouped = Object.entries(TYPE_META).map(([k, meta]) => ({
+    key: k, meta, points: points.filter(p => p.type_infrastructure === k)
+  })).filter(g => g.points.length > 0);
+
+  return (
+    <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16}}>
+      <Panel title="Carte géographique" subtitle="Coordonnées GPS capturées sur le terrain · régions de Kayes (nord) et Kita (sud)">
+        <div style={{position: 'relative', marginTop: 12, background: '#FAF8F2', border: `1px solid ${B.line}`, borderRadius: 4, overflow: 'hidden'}}>
+          <ResponsiveContainer width="100%" height={540}>
+            <ScatterChart margin={{top: 20, right: 30, bottom: 40, left: 30}}>
+              <CartesianGrid strokeDasharray="2 4" stroke={B.line} />
+              <ReferenceArea x1={-12.3} x2={-11.0} y1={14.3} y2={14.9} fill={B.greenTint} fillOpacity={0.35} stroke="none" />
+              <ReferenceArea x1={-10.0} x2={-8.8} y1={12.7} y2={13.2} fill={B.greenTint} fillOpacity={0.35} stroke="none" />
+              <XAxis type="number" dataKey="lon" domain={[-12.3, -8.8]} 
+                     tick={{fill: B.inkMuted, fontSize: 10}} axisLine={{stroke: B.line}} tickLine={false}
+                     label={{value: 'Longitude (°)', position: 'insideBottom', offset: -10, fill: B.inkMuted, fontSize: 11}}
+                     tickFormatter={(v) => v.toFixed(1)} />
+              <YAxis type="number" dataKey="lat" domain={[12.7, 14.9]}
+                     tick={{fill: B.inkMuted, fontSize: 10}} axisLine={{stroke: B.line}} tickLine={false}
+                     label={{value: 'Latitude (°)', angle: -90, position: 'insideLeft', fill: B.inkMuted, fontSize: 11}}
+                     tickFormatter={(v) => v.toFixed(1)} />
+              <Tooltip content={({active, payload}) => {
+                if (!active || !payload?.length) return null;
+                const p = payload[0].payload;
+                const meta = TYPE_META[p.type_infrastructure];
+                return (
+                  <div style={{background: 'white', border: `1px solid ${B.line}`, borderRadius: 4, padding: 12, fontSize: 12, minWidth: 220, boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                    <div className="font-mono" style={{fontSize: 11, color: B.ink, fontWeight: 700}}>{p.name}</div>
+                    <div style={{color: meta.color, fontWeight: 500, marginTop: 4}}>{meta.label}</div>
+                    <div style={{color: B.inkMuted, marginTop: 2}}>{prettyCommune(p.commune)} · {prettyCercle(p.cercle)}</div>
+                    <div className="font-mono" style={{color: B.inkMuted, fontSize: 10, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${B.line}`}}>
+                      {p.lat.toFixed(4)}°, {p.lon.toFixed(4)}°
+                    </div>
+                    <div style={{marginTop: 6, fontSize: 11, color: B.inkMuted}}>
+                      {p.missionCount} visite{p.missionCount > 1 ? 's' : ''} · {p.photoCount} photo{p.photoCount > 1 ? 's' : ''}
+                    </div>
+                  </div>
+                );
+              }} />
+              {grouped.map(g => (
+                <Scatter key={g.key} name={g.meta.label} data={g.points} fill={g.meta.color}>
+                  {g.points.map((p, i) => <Cell key={i} fill={g.meta.color} stroke="white" strokeWidth={2} />)}
+                </Scatter>
+              ))}
+            </ScatterChart>
+          </ResponsiveContainer>
+          <div style={{position: 'absolute', top: 16, left: 70, background: 'white', border: `1px solid ${B.line}`, borderRadius: 3, padding: '3px 8px', fontSize: 10, color: B.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600}}>
+            Région de Kayes
+          </div>
+          <div style={{position: 'absolute', bottom: 70, right: 60, background: 'white', border: `1px solid ${B.line}`, borderRadius: 3, padding: '3px 8px', fontSize: 10, color: B.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600}}>
+            Région de Kita
+          </div>
+        </div>
+      </Panel>
+
+      <div style={{display: 'grid', gap: 16, alignContent: 'start'}}>
+        <Panel title="Légende">
+          <div style={{marginTop: 8, display: 'grid', gap: 8}}>
+            {grouped.map(g => (
+              <div key={g.key} style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                <div style={{width: 12, height: 12, borderRadius: '50%', background: g.meta.color, border: '2px solid white', boxShadow: '0 0 0 1px ' + g.meta.color, flexShrink: 0}} />
+                <Icon name={TYPE_ICON[g.key]} size={14} color={g.meta.color} style={{flexShrink: 0}} />
+                <div style={{flex: 1, fontSize: 12, color: B.ink}}>{g.meta.label}</div>
+                <div className="font-mono" style={{fontSize: 12, color: B.inkMuted}}>{g.points.length}</div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel title="Liste des sites" subtitle="Survolez un point sur la carte ou cliquez ci-dessous">
+          <div style={{marginTop: 8, display: 'grid', gap: 4, maxHeight: 280, overflowY: 'auto'}}>
+            {points.map(p => (
+              <div key={p.caseid} style={{padding: '6px 8px', borderRadius: 3, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6}}>
+                <div style={{width: 8, height: 8, borderRadius: '50%', background: TYPE_META[p.type_infrastructure].color, flexShrink: 0}} />
+                <div className="font-mono" style={{color: B.ink, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{p.name}</div>
+                <div style={{color: B.inkMuted, fontSize: 10}}>{prettyCommune(p.commune)}</div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+// ============= PORTFOLIO TAB =============
+function PortfolioTab({setLightbox, selectedInfra, setSelectedInfra}) {
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [regionFilter, setRegionFilter] = useState('all');
+
+  const infras = DATA.infrastructures.filter(i => 
+    (typeFilter === 'all' || i.type_infrastructure === typeFilter) &&
+    (regionFilter === 'all' || i.region === regionFilter)
+  );
+
+  return (
+    <div style={{display: 'grid', gap: 16}}>
+      {/* Filter bar */}
+      <div style={{display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: B.paperDeep, border: `1px solid ${B.line}`, borderRadius: 4}}>
+        <Icon name="filter" size={14} color={B.inkMuted} />
+        <span style={{fontSize: 11, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.08em'}}>Filtrer</span>
+        <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="filt-sel">
+          <option value="all">Toutes régions</option>
+          <option value="kayes">Région de Kayes</option>
+          <option value="kita">Région de Kita</option>
+        </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="filt-sel">
+          <option value="all">Tous types</option>
+          {Object.entries(TYPE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+        </select>
+        <div style={{marginLeft: 'auto', fontSize: 12, color: B.inkMuted}}>
+          <span style={{color: B.ink, fontWeight: 600}}>{infras.length}</span> infrastructure{infras.length > 1 ? 's' : ''} affichée{infras.length > 1 ? 's' : ''}
+        </div>
+      </div>
+
+      <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14}}>
+        {infras.map(r => <InfraCard key={r.caseid} infra={r} setLightbox={setLightbox} highlighted={selectedInfra === r.caseid} />)}
+      </div>
+    </div>
+  );
+}
+
+function InfraCard({infra, setLightbox, highlighted}) {
+  const [expanded, setExpanded] = useState(highlighted);
+  const meta = TYPE_META[infra.type_infrastructure];
+  const missions = missionsFor(infra.caseid);
+  const allPhotos = missions.flatMap(m => photosFor(m.ID_gen).map((p, i) => ({
+    src: p, mission: m, caption: m['commentaire_de_la_photo_' + (i+1)] || m.objectifs_de_la_mission
+  })));
+  const approved = missions.filter(m => m.statut_mission === 'approuvee').length;
+
+  return (
+    <div style={{background: 'white', border: `1px solid ${highlighted ? B.green : B.line}`, borderRadius: 6, overflow: 'hidden', boxShadow: highlighted ? `0 0 0 2px ${B.greenTint}` : 'none'}}>
+      {/* Thumbnail strip */}
+      <div style={{height: 140, background: meta.color + '15', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        {allPhotos.length > 0 ? (
+          <img src={allPhotos[0].src} alt="" 
+               onClick={() => setLightbox({src: allPhotos[0].src, caption: allPhotos[0].caption, gallery: allPhotos})}
+               style={{width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer'}} />
+        ) : (
+          <div style={{color: meta.color, opacity: 0.4}}>
+            <Icon name={TYPE_ICON[infra.type_infrastructure]} size={48} color={meta.color} />
+          </div>
+        )}
+        <div style={{position: 'absolute', top: 8, left: 8, background: 'white', borderRadius: 3, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: meta.color, display: 'flex', alignItems: 'center', gap: 4}}>
+          <Icon name={TYPE_ICON[infra.type_infrastructure]} size={10} color={meta.color} />
+          {meta.short}
+        </div>
+        {allPhotos.length > 0 && (
+          <div style={{position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.65)', color: 'white', borderRadius: 3, padding: '2px 6px', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4}}>
+            <Icon name="camera" size={10} color="white" />
+            {allPhotos.length}
+          </div>
+        )}
+      </div>
+      {/* Body */}
+      <div style={{padding: 14}}>
+        <div className="font-mono" style={{fontSize: 12, color: B.ink, fontWeight: 600}}>{infra.name}</div>
+        <div style={{fontSize: 11, color: B.inkMuted, marginTop: 2}}>
+          <Icon name="pin" size={10} style={{display: 'inline', verticalAlign: -1, marginRight: 3}} color={B.inkMuted} />
+          {prettyCommune(infra.commune)} · {prettyCercle(infra.cercle)}
+        </div>
+        <div className="font-mono" style={{fontSize: 10, color: B.inkMuted, marginTop: 6}}>
+          {infra.lat?.toFixed(4)}° N, {Math.abs(infra.lon).toFixed(4)}° O
+        </div>
+        <div style={{display: 'flex', gap: 12, marginTop: 10, fontSize: 11, color: B.inkMuted, paddingTop: 10, borderTop: `1px solid ${B.lineLight}`}}>
+          <div>
+            <div className="font-mono" style={{fontSize: 16, color: missions.length ? B.green : B.inkMuted, fontWeight: 600, lineHeight: 1}}>{missions.length}</div>
+            <div style={{fontSize: 10, marginTop: 2}}>visite{missions.length > 1 ? 's' : ''}</div>
+          </div>
+          <div>
+            <div className="font-mono" style={{fontSize: 16, color: approved ? B.green : B.inkMuted, fontWeight: 600, lineHeight: 1}}>{approved}</div>
+            <div style={{fontSize: 10, marginTop: 2}}>approuvée{approved > 1 ? 's' : ''}</div>
+          </div>
+          <div>
+            <div className="font-mono" style={{fontSize: 16, color: allPhotos.length ? B.ink : B.inkMuted, fontWeight: 600, lineHeight: 1}}>{allPhotos.length}</div>
+            <div style={{fontSize: 10, marginTop: 2}}>photo{allPhotos.length > 1 ? 's' : ''}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============= VISITS TAB =============
+function VisitsTab({setLightbox, filter, setFilter}) {
+  const missions = [...DATA.missions]
+    .filter(m => filter === 'all' || m.statut_mission === filter)
+    .sort((a, b) => b.opened_date.localeCompare(a.opened_date));
+
+  return (
+    <div style={{display: 'grid', gap: 16}}>
+      <div style={{display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: B.paperDeep, border: `1px solid ${B.line}`, borderRadius: 4}}>
+        <Icon name="filter" size={14} color={B.inkMuted} />
+        <span style={{fontSize: 11, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.08em'}}>Statut</span>
+        <button onClick={() => setFilter('all')} className={filter === 'all' ? 'chip-a' : 'chip'}>Toutes ({DATA.missions.length})</button>
+        <button onClick={() => setFilter('approuvee')} className={filter === 'approuvee' ? 'chip-a' : 'chip'}>Approuvées ({DATA.missions.filter(m => m.statut_mission === 'approuvee').length})</button>
+        <button onClick={() => setFilter('verified')} className={filter === 'verified' ? 'chip-a' : 'chip'}>En vérification ({DATA.missions.filter(m => m.statut_mission === 'verified').length})</button>
+      </div>
+
+      <div style={{display: 'grid', gap: 12}}>
+        {missions.map(m => <MissionCard key={m.caseid} mission={m} setLightbox={setLightbox} />)}
+      </div>
+    </div>
+  );
+}
+
+function MissionCard({mission, setLightbox}) {
+  const infra = DATA.infrastructures.find(i => i.caseid === mission.parent_caseid);
+  const meta = infra ? TYPE_META[infra.type_infrastructure] : null;
+  const photos = photosFor(mission.ID_gen);
+  const statusColor = mission.statut_mission === 'approuvee' ? B.green : B.amber;
+  const statusLabel = mission.statut_mission === 'approuvee' ? 'Approuvée' : 'En vérification';
+
+  return (
+    <div style={{background: 'white', border: `1px solid ${B.line}`, borderRadius: 6, padding: 20}}>
+      <div style={{display: 'flex', gap: 20}}>
+        {/* Left: meta */}
+        <div style={{width: 220, flexShrink: 0}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <div style={{padding: '2px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: statusColor + '22', color: statusColor, textTransform: 'uppercase', letterSpacing: '0.05em'}}>{statusLabel}</div>
+            <div className="font-mono" style={{fontSize: 11, color: B.inkMuted}}>{mission.ID_gen}</div>
+          </div>
+          <div className="font-display" style={{fontSize: 17, fontWeight: 600, color: B.ink, marginTop: 8, lineHeight: 1.2, textTransform: 'capitalize'}}>
+            {mission.nom_mission}
+          </div>
+          <div style={{fontSize: 11, color: B.inkMuted, marginTop: 6}}>
+            <Icon name="calendar" size={10} style={{display: 'inline', verticalAlign: -1, marginRight: 4}} color={B.inkMuted} />
+            {mission.opened_date}
+          </div>
+          <div style={{fontSize: 11, color: B.inkMuted, marginTop: 3}}>
+            <Icon name="users" size={10} style={{display: 'inline', verticalAlign: -1, marginRight: 4}} color={B.inkMuted} />
+            {mission.opened_by_username}
+          </div>
+
+          {infra && (
+            <div style={{marginTop: 12, padding: 10, background: meta.color + '10', borderRadius: 4, borderLeft: `3px solid ${meta.color}`}}>
+              <div style={{fontSize: 10, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em'}}>Site concerné</div>
+              <div className="font-mono" style={{fontSize: 12, color: B.ink, fontWeight: 600, marginTop: 2}}>{infra.name}</div>
+              <div style={{fontSize: 11, color: meta.color, marginTop: 2}}>{meta.label}</div>
+              <div style={{fontSize: 11, color: B.inkMuted, marginTop: 4}}>{prettyCommune(infra.commune)}</div>
+            </div>
+          )}
+
+          {mission.objectifs_de_la_mission && (
+            <div style={{marginTop: 12}}>
+              <div style={{fontSize: 10, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em'}}>Objectif</div>
+              <div style={{fontSize: 12, color: B.ink, marginTop: 3, fontStyle: 'italic'}}>« {mission.objectifs_de_la_mission} »</div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: photos */}
+        <div style={{flex: 1}}>
+          {photos.length > 0 ? (
+            <div>
+              <div style={{fontSize: 11, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em', marginBottom: 8}}>
+                Documentation photographique
+              </div>
+              <div style={{display: 'grid', gridTemplateColumns: `repeat(${Math.min(photos.length, 3)}, 1fr)`, gap: 10}}>
+                {photos.map((p, i) => {
+                  const caption = mission['commentaire_de_la_photo_' + (i+1)] || mission.objectifs_de_la_mission;
+                  return (
+                    <div key={i} style={{cursor: 'pointer'}} onClick={() => setLightbox({src: p, caption})}>
+                      <img src={p} style={{width: '100%', height: 200, objectFit: 'cover', borderRadius: 4, border: `1px solid ${B.line}`, transition: 'transform 0.2s'}}
+                           onMouseEnter={e => e.target.style.transform = 'scale(1.02)'}
+                           onMouseLeave={e => e.target.style.transform = 'scale(1)'} />
+                      {caption && <div style={{fontSize: 11, color: B.inkMuted, marginTop: 6, lineHeight: 1.4, fontStyle: 'italic'}}>« {caption} »</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{padding: 30, textAlign: 'center', background: B.paperDeep, borderRadius: 4, border: `1px dashed ${B.line}`, color: B.inkMuted, fontSize: 12}}>
+              <Icon name="camera" size={20} color={B.inkMuted} style={{opacity: 0.5}} />
+              <div style={{marginTop: 8}}>Aucune photo téléchargée pour cette mission</div>
+              {mission.commentaire_de_la_photo_1 && (
+                <div style={{marginTop: 10, fontSize: 11, fontStyle: 'italic', color: B.ink}}>Captions enregistrées : « {mission.commentaire_de_la_photo_1} »</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============= LIGHTBOX =============
+function Lightbox({src, caption, onClose}) {
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(10,10,8,0.92)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+      padding: 40, cursor: 'zoom-out'
+    }}>
+      <div style={{maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center'}} onClick={e => e.stopPropagation()}>
+        <img src={src} style={{maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: 4}} />
+        {caption && <div style={{marginTop: 14, color: 'white', fontSize: 14, maxWidth: 600, textAlign: 'center', fontStyle: 'italic'}}>« {caption} »</div>}
+      </div>
+      <button onClick={onClose} style={{position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 40, height: 40, cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <Icon name="close" size={20} color="white" />
+      </button>
+    </div>
+  );
+}
+
+// ============= FOOTER =============
+function Footer() {
+  return (
+    <footer style={{borderTop: `1px solid ${B.line}`, background: B.paperDeep}}>
+      <div className="max-w-7xl mx-auto px-6 py-5" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: B.inkMuted}}>
+        <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+          <Icon name="layers" size={12} color={B.inkMuted} />
+          Prototype de visualisation · Données extraites de CommCare HQ (serveur EU) · {DATA.infrastructures.length} infrastructures · {DATA.missions.length} visites · {Object.values(PHOTOS).reduce((s,a)=>s+a.length,0)} photos
+        </div>
+        <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+          <span className="font-mono">MLI 1159 · KFW</span>
+          <div style={{width: 1, height: 10, background: B.line}} />
+          <span>Welthungerhilfe · Donilab · Dimagi</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// Render
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+  </script>
+</body>
+</html>
