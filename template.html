@@ -10,11 +10,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
+  <!-- Leaflet (basemap library) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin />
+
   <!-- Libraries via CDN — load order matters: PropTypes before Recharts -->
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.4/babel.min.js"></script>
   <!-- Fallbacks to unpkg if cdnjs fails (some corporate networks block cdnjs) -->
   <script>
@@ -24,6 +28,7 @@
       if (typeof ReactDOM === 'undefined') missing.push('ReactDOM');
       if (typeof PropTypes === 'undefined') missing.push('PropTypes');
       if (typeof Recharts === 'undefined') missing.push('Recharts');
+      if (typeof L === 'undefined') missing.push('Leaflet');
       if (typeof Babel === 'undefined') missing.push('Babel');
       if (missing.length) {
         setTimeout(function() {
@@ -87,6 +92,25 @@
 
     .recharts-tooltip-wrapper { outline: none !important; }
 
+    /* Leaflet overrides — match RMIS design language */
+    .leaflet-container { background: #FAF8F2; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    .leaflet-tooltip.rmis-tip {
+      background: white; border: 1px solid #E0DED6; border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08); padding: 8px 10px;
+      font-size: 12px; color: #1A1A17;
+    }
+    .leaflet-tooltip.rmis-tip:before { display: none; }
+    .leaflet-control-attribution { font-size: 10px !important; background: rgba(255,255,255,0.85) !important; }
+    .leaflet-control-scale-line {
+      background: rgba(255,255,255,0.85); border-color: #5A5A54; color: #1A1A17;
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    }
+    .leaflet-control-zoom a {
+      background: white; color: #1A1A17; border-color: #E0DED6;
+    }
+    .leaflet-control-zoom a:hover { background: #F4F2EA; color: #2FAB15; }
+    .rmis-row-active { background: #E8F7E3; }
+
     /* Scrollbar styling */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -118,7 +142,7 @@
   <!-- React component -->
   <script type="text/babel" data-presets="react">
 
-const { useState, useMemo, useEffect } = React;
+const { useState, useMemo, useEffect, useRef } = React;
 const { ScatterChart, Scatter, BarChart, Bar, PieChart, Pie,
         XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
         Cell, ReferenceArea } = Recharts;
@@ -522,68 +546,107 @@ function InfraMiniCard({infra, onClick}) {
 
 // ============= MAP TAB =============
 function MapTab({setLightbox}) {
+  const mapEl = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef({});
   const [hoveredId, setHoveredId] = useState(null);
-  const [clickedInfra, setClickedInfra] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
 
-  const infras = DATA.infrastructures.filter(i => i.lat && i.lon);
-  const points = infras.map(r => ({
-    ...r, 
-    missionCount: missionsFor(r.caseid).length,
-    photoCount: missionsFor(r.caseid).reduce((s, m) => s + photosFor(m.ID_gen).length, 0),
-  }));
+  const points = useMemo(() => DATA.infrastructures
+    .filter(i => i.lat && i.lon)
+    .map(r => ({
+      ...r,
+      missionCount: missionsFor(r.caseid).length,
+      photoCount: missionsFor(r.caseid).reduce((s, m) => s + photosFor(m.ID_gen).length, 0),
+    })), []);
+
   const grouped = Object.entries(TYPE_META).map(([k, meta]) => ({
     key: k, meta, points: points.filter(p => p.type_infrastructure === k)
   })).filter(g => g.points.length > 0);
 
+  // Initialise the Leaflet map once
+  useEffect(() => {
+    if (!mapEl.current || mapRef.current || typeof L === 'undefined') return;
+
+    const map = L.map(mapEl.current, {
+      zoomControl: true,
+      scrollWheelZoom: true,
+      preferCanvas: true,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd', maxZoom: 19,
+    }).addTo(map);
+    L.control.scale({imperial: false, position: 'bottomleft'}).addTo(map);
+
+    if (points.length > 0) {
+      const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
+      map.fitBounds(bounds, {padding: [50, 50]});
+    } else {
+      map.setView([13.8, -10.5], 7);
+    }
+
+    points.forEach(p => {
+      const meta = TYPE_META[p.type_infrastructure] || {color: '#7A7668', label: p.type_infrastructure};
+      const marker = L.circleMarker([p.lat, p.lon], {
+        radius: 7,
+        fillColor: meta.color,
+        color: 'white',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 1,
+      }).addTo(map);
+
+      const tipHtml = `
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:#1A1A17">${p.name}</div>
+        <div style="color:${meta.color};font-weight:500;margin-top:3px;font-size:11px">${meta.label}</div>
+        <div style="color:#5A5A54;margin-top:1px;font-size:11px">${prettyCommune(p.commune)} · ${prettyCercle(p.cercle)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;color:#5A5A54;font-size:10px;margin-top:6px;padding-top:6px;border-top:1px solid #E0DED6">
+          ${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°
+        </div>
+        <div style="font-size:11px;color:#5A5A54;margin-top:4px">
+          ${p.missionCount} visite${p.missionCount > 1 ? 's' : ''} · ${p.photoCount} photo${p.photoCount > 1 ? 's' : ''}
+        </div>`;
+      marker.bindTooltip(tipHtml, {direction: 'top', offset: [0, -8], className: 'rmis-tip', sticky: false});
+
+      marker.on('mouseover', () => setHoveredId(p.caseid));
+      marker.on('mouseout',  () => setHoveredId(null));
+      marker.on('click',     () => setSelectedId(p.caseid));
+
+      markersRef.current[p.caseid] = marker;
+    });
+
+    mapRef.current = map;
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markersRef.current = {};
+    };
+  }, []);
+
+  // Highlight active marker on hover/select
+  useEffect(() => {
+    Object.entries(markersRef.current).forEach(([id, marker]) => {
+      const isActive = id === hoveredId || id === selectedId;
+      marker.setStyle({radius: isActive ? 10 : 7, weight: isActive ? 3 : 2});
+      if (isActive) marker.bringToFront();
+    });
+  }, [hoveredId, selectedId]);
+
+  const focusSite = (p) => {
+    setSelectedId(p.caseid);
+    const map = mapRef.current;
+    const marker = markersRef.current[p.caseid];
+    if (map && marker) {
+      map.setView([p.lat, p.lon], Math.max(map.getZoom(), 11), {animate: true});
+      marker.openTooltip();
+    }
+  };
+
   return (
     <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16}}>
       <Panel title="Carte géographique" subtitle="Coordonnées GPS capturées sur le terrain · régions de Kayes (nord) et Kita (sud)">
-        <div style={{position: 'relative', marginTop: 12, background: '#FAF8F2', border: `1px solid ${B.line}`, borderRadius: 4, overflow: 'hidden'}}>
-          <ResponsiveContainer width="100%" height={540}>
-            <ScatterChart margin={{top: 20, right: 30, bottom: 40, left: 30}}>
-              <CartesianGrid strokeDasharray="2 4" stroke={B.line} />
-              <ReferenceArea x1={-12.3} x2={-11.0} y1={14.3} y2={14.9} fill={B.greenTint} fillOpacity={0.35} stroke="none" />
-              <ReferenceArea x1={-10.0} x2={-8.8} y1={12.7} y2={13.2} fill={B.greenTint} fillOpacity={0.35} stroke="none" />
-              <XAxis type="number" dataKey="lon" domain={[-12.3, -8.8]} 
-                     tick={{fill: B.inkMuted, fontSize: 10}} axisLine={{stroke: B.line}} tickLine={false}
-                     label={{value: 'Longitude (°)', position: 'insideBottom', offset: -10, fill: B.inkMuted, fontSize: 11}}
-                     tickFormatter={(v) => v.toFixed(1)} />
-              <YAxis type="number" dataKey="lat" domain={[12.7, 14.9]}
-                     tick={{fill: B.inkMuted, fontSize: 10}} axisLine={{stroke: B.line}} tickLine={false}
-                     label={{value: 'Latitude (°)', angle: -90, position: 'insideLeft', fill: B.inkMuted, fontSize: 11}}
-                     tickFormatter={(v) => v.toFixed(1)} />
-              <Tooltip content={({active, payload}) => {
-                if (!active || !payload?.length) return null;
-                const p = payload[0].payload;
-                const meta = TYPE_META[p.type_infrastructure];
-                return (
-                  <div style={{background: 'white', border: `1px solid ${B.line}`, borderRadius: 4, padding: 12, fontSize: 12, minWidth: 220, boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
-                    <div className="font-mono" style={{fontSize: 11, color: B.ink, fontWeight: 700}}>{p.name}</div>
-                    <div style={{color: meta.color, fontWeight: 500, marginTop: 4}}>{meta.label}</div>
-                    <div style={{color: B.inkMuted, marginTop: 2}}>{prettyCommune(p.commune)} · {prettyCercle(p.cercle)}</div>
-                    <div className="font-mono" style={{color: B.inkMuted, fontSize: 10, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${B.line}`}}>
-                      {p.lat.toFixed(4)}°, {p.lon.toFixed(4)}°
-                    </div>
-                    <div style={{marginTop: 6, fontSize: 11, color: B.inkMuted}}>
-                      {p.missionCount} visite{p.missionCount > 1 ? 's' : ''} · {p.photoCount} photo{p.photoCount > 1 ? 's' : ''}
-                    </div>
-                  </div>
-                );
-              }} />
-              {grouped.map(g => (
-                <Scatter key={g.key} name={g.meta.label} data={g.points} fill={g.meta.color}>
-                  {g.points.map((p, i) => <Cell key={i} fill={g.meta.color} stroke="white" strokeWidth={2} />)}
-                </Scatter>
-              ))}
-            </ScatterChart>
-          </ResponsiveContainer>
-          <div style={{position: 'absolute', top: 16, left: 70, background: 'white', border: `1px solid ${B.line}`, borderRadius: 3, padding: '3px 8px', fontSize: 10, color: B.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600}}>
-            Région de Kayes
-          </div>
-          <div style={{position: 'absolute', bottom: 70, right: 60, background: 'white', border: `1px solid ${B.line}`, borderRadius: 3, padding: '3px 8px', fontSize: 10, color: B.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600}}>
-            Région de Kita
-          </div>
-        </div>
+        <div ref={mapEl} style={{height: 540, marginTop: 12, background: '#FAF8F2', border: `1px solid ${B.line}`, borderRadius: 4, overflow: 'hidden'}} />
       </Panel>
 
       <div style={{display: 'grid', gap: 16, alignContent: 'start'}}>
@@ -600,15 +663,23 @@ function MapTab({setLightbox}) {
           </div>
         </Panel>
 
-        <Panel title="Liste des sites" subtitle="Survolez un point sur la carte ou cliquez ci-dessous">
-          <div style={{marginTop: 8, display: 'grid', gap: 4, maxHeight: 280, overflowY: 'auto'}}>
-            {points.map(p => (
-              <div key={p.caseid} style={{padding: '6px 8px', borderRadius: 3, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6}}>
-                <div style={{width: 8, height: 8, borderRadius: '50%', background: TYPE_META[p.type_infrastructure].color, flexShrink: 0}} />
-                <div className="font-mono" style={{color: B.ink, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{p.name}</div>
-                <div style={{color: B.inkMuted, fontSize: 10}}>{prettyCommune(p.commune)}</div>
-              </div>
-            ))}
+        <Panel title="Liste des sites" subtitle="Survolez ou cliquez pour cibler le point sur la carte">
+          <div style={{marginTop: 8, display: 'grid', gap: 2, maxHeight: 320, overflowY: 'auto'}}>
+            {points.map(p => {
+              const active = p.caseid === selectedId || p.caseid === hoveredId;
+              return (
+                <div key={p.caseid}
+                     onMouseEnter={() => setHoveredId(p.caseid)}
+                     onMouseLeave={() => setHoveredId(null)}
+                     onClick={() => focusSite(p)}
+                     className={active ? 'rmis-row-active' : ''}
+                     style={{padding: '6px 8px', borderRadius: 3, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', transition: 'background 0.12s'}}>
+                  <div style={{width: 8, height: 8, borderRadius: '50%', background: TYPE_META[p.type_infrastructure].color, flexShrink: 0}} />
+                  <div className="font-mono" style={{color: B.ink, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{p.name}</div>
+                  <div style={{color: B.inkMuted, fontSize: 10}}>{prettyCommune(p.commune)}</div>
+                </div>
+              );
+            })}
           </div>
         </Panel>
       </div>
