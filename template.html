@@ -278,6 +278,9 @@ function Header() {
 
 // ============= PHASE BANNER =============
 function PhaseBanner() {
+  const nbSites = DATA.infrastructures.length;
+  const nbVisites = DATA.missions.length;
+  const nbPhotos = Object.values(PHOTOS).reduce((s, a) => s + a.length, 0);
   return (
     <div style={{background: B.greenTint, borderBottom: `1px solid ${B.greenTintDeep}`}}>
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -286,7 +289,7 @@ function PhaseBanner() {
             Phase de référence — documentation avant travaux
           </div>
           <div style={{color: B.greenDark, fontSize: 13, marginTop: 4, maxWidth: 720}}>
-            14 sites catalogués · 16 visites de terrain réalisées · 47 photos documentaires collectées.
+            {nbSites} site{nbSites > 1 ? 's' : ''} catalogué{nbSites > 1 ? 's' : ''} · {nbVisites} visite{nbVisites > 1 ? 's' : ''} de terrain réalisée{nbVisites > 1 ? 's' : ''} · {nbPhotos} photo{nbPhotos > 1 ? 's' : ''} documentaire{nbPhotos > 1 ? 's' : ''} collectée{nbPhotos > 1 ? 's' : ''}.
             Démarrage des travaux prévu à l'issue de l'approbation finale des dossiers par les autorités locales.
           </div>
         </div>
@@ -331,7 +334,7 @@ function TabBar({tab, setTab}) {
   const tabs = [
     {id: 'overview', label: "Vue d'ensemble"},
     {id: 'map', label: "Carte"},
-    {id: 'portfolio', label: "Les 15 infrastructures"},
+    {id: 'portfolio', label: `Les ${DATA.infrastructures.length} infrastructures`},
     {id: 'visits', label: "Visites terrain & photos"},
   ];
   return (
@@ -416,7 +419,7 @@ function OverviewTab({setTab, setLightbox, setSelectedInfra}) {
 
       {/* Type distribution — pie + bar */}
       <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16}}>
-        <Panel title="Répartition par type d'ouvrage" subtitle="Proportion sur les 15 infrastructures">
+        <Panel title="Répartition par type d'ouvrage" subtitle={`Proportion sur les ${infras.length} infrastructures`}>
           <div style={{display: 'flex', alignItems: 'center', gap: 16, marginTop: 8}}>
             <div style={{flexShrink: 0}}>
               <ResponsiveContainer width={220} height={220}>
@@ -462,7 +465,7 @@ function OverviewTab({setTab, setLightbox, setSelectedInfra}) {
 
       {/* Portefeuille preview + map preview */}
       <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16}}>
-        <Panel title="Aperçu des 15 infrastructures" subtitle="Classées par date d'enregistrement — voir l'onglet « Les 15 infrastructures » pour la vue complète">
+        <Panel title={`Aperçu des ${infras.length} infrastructures`} subtitle={`Classées par date d'enregistrement — voir l'onglet « Les ${infras.length} infrastructures » pour la vue complète`}>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 10}}>
             {infras.slice(0, 6).map(r => <InfraMiniCard key={r.caseid} infra={r} onClick={() => { setSelectedInfra(r.caseid); setTab('portfolio'); }} />)}
           </div>
