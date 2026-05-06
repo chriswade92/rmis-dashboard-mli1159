@@ -45,10 +45,10 @@ Two CommCare case types linked parent→child:
 - Mission M42860: debut_de_la_mission = 2029 (typo, should be 2026)
 - Mission M94020: fin_de_la_mission = 2024 (typo, should be 2026)
 - HIMO fields: 0/16 filled (works not started yet — show placeholder, not zeros)
-- 4 missions without photos: M32726, M70425, M84077, M98442
+- photos/Picture1.jpg does not match M{ID}_photo{N}.jpg convention and is skipped by update.py
 
 ## Current data state (29 avril 2026)
-- 15 infrastructures | 16 missions | 16/16 approuvées | 14 photos (12 missions)
+- 14 infrastructures | 16 missions | 16/16 approuvées | 47 photos (16 missions)
 - Regions: Kayes, Kita | Cercles: ambidedi, kayes, kita, sagabari, sebekoro
 
 ## Infrastructure types + colours
