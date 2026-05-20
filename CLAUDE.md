@@ -23,20 +23,24 @@ whh_logo.png ← WHH brand logo
 
 ## Data model
 Two CommCare case types linked parent→child:
-- **Infrastructure** (parent): 15 sites with GPS, type, commune/cercle/region
+- **Infrastructure** (parent): one row per site with GPS, type, commune/cercle/region (count grows over time — read from `DATA.infrastructures.length`, never hardcode)
 - **Mission** (child): field visits linked via `indices.mli1159_infrastructure` → `parent_caseid`
 - Photo convention: `photos/M{ID_gen}_photo{N}.jpg`
 
 ## Tech stack
 - React 18 + Recharts loaded from cdnjs CDN (PropTypes must load BEFORE Recharts)
+- Leaflet 1.9.4 + CartoDB Positron basemap (Carte tab) — needs internet at view time for tiles
 - Babel standalone for in-browser JSX transpilation
-- All data + photos embedded as base64 in a single self-contained HTML file
+- All data + photos embedded as base64 in a single self-contained HTML file (basemap tiles excepted)
 - WHH brand green: #2FAB15 | Fonts: Fraunces (display) + IBM Plex Sans + IBM Plex Mono
+
+## Counts are dynamic
+Site/visit/photo counts in UI labels (tab bar, panel titles/subtitles, PhaseBanner sentence) MUST read from `DATA.infrastructures.length` / `DATA.missions.length` / `Object.values(PHOTOS).reduce(...)` at render time. Never hardcode a number into a label — the dashboard is regenerated each cycle as the data grows.
 
 ## Dashboard tabs
 1. Vue d'ensemble — KPIs, pie chart (type), bar chart (type × cercle), phase banner
-2. Carte — scatter plot lat/lon of all 15 sites coloured by type
-3. Les 15 infrastructures — card grid with photo thumbnails, filterable
+2. Carte — interactive Leaflet map of Mali with coloured circle markers, hover tooltips, zoom/pan, scale bar, and bidirectional hover/click sync with right-hand site list
+3. Les N infrastructures — card grid with photo thumbnails, filterable (tab label is dynamic)
 4. Visites terrain & photos — mission cards with photos + captions, lightbox on click
 5. (No data quality tab in partner-facing version)
 
@@ -47,8 +51,8 @@ Two CommCare case types linked parent→child:
 - HIMO fields: 0/16 filled (works not started yet — show placeholder, not zeros)
 - photos/Picture1.jpg does not match M{ID}_photo{N}.jpg convention and is skipped by update.py
 
-## Current data state (29 avril 2026)
-- 14 infrastructures | 16 missions | 16/16 approuvées | 47 photos (16 missions)
+## Current data state (20 mai 2026)
+- 15 infrastructures | 17 missions | 16/17 approuvées | 50 photos (17 missions)
 - Regions: Kayes, Kita | Cercles: ambidedi, kayes, kita, sagabari, sebekoro
 
 ## Infrastructure types + colours
