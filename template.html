@@ -323,7 +323,7 @@ function Header() {
             <div style={{width: 6, height: 6, borderRadius: '50%', background: B.green}} />
             Données CommCare HQ · serveur EU
           </div>
-          <div className="font-mono">Mai 2026</div>
+          <div className="font-mono">Juin 2026</div>
         </div>
       </div>
     </header>
@@ -703,6 +703,8 @@ function MapTab({setLightbox}) {
     });
 
     mapRef.current = map;
+    // Container is sized with vh — make sure Leaflet measures it after layout settles
+    setTimeout(() => map.invalidateSize(), 60);
     return () => {
       map.remove();
       mapRef.current = null;
@@ -742,12 +744,14 @@ function MapTab({setLightbox}) {
   );
 
   return (
-    <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16}}>
+    <div style={{display: 'grid', gap: 16}}>
+      {/* Map — full width, tall */}
       <Panel title="Carte géographique" subtitle={`Coordonnées GPS capturées sur le terrain · ${points.filter(p=>p.kind==='infra').length} infrastructures${actGroups.length ? ' + ' + points.filter(p=>p.kind!=='infra').length + ' activités' : ''} · régions de Kayes & Kita`}>
-        <div ref={mapEl} style={{height: 540, marginTop: 12, background: '#E8EEF2', border: `1px solid ${B.line}`, borderRadius: 4, overflow: 'hidden'}} />
+        <div ref={mapEl} style={{height: '70vh', minHeight: 520, marginTop: 12, background: '#E8EEF2', border: `1px solid ${B.line}`, borderRadius: 4, overflow: 'hidden'}} />
       </Panel>
 
-      <div style={{display: 'grid', gap: 16, alignContent: 'start'}}>
+      {/* Legend + point list — compact row under the map */}
+      <div style={{display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, alignItems: 'start'}}>
         <Panel title="Légende">
           <div style={{marginTop: 8, display: 'grid', gap: 8}}>
             {infraGroups.map(g => (
@@ -765,7 +769,7 @@ function MapTab({setLightbox}) {
         </Panel>
 
         <Panel title="Points cartographiés" subtitle="Survolez ou cliquez pour cibler le point sur la carte">
-          <div style={{marginTop: 8, display: 'grid', gap: 2, maxHeight: 320, overflowY: 'auto'}}>
+          <div style={{marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '2px 18px', maxHeight: 240, overflowY: 'auto'}}>
             {points.map(p => {
               const active = p.id === selectedId || p.id === hoveredId;
               return (
