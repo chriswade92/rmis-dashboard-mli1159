@@ -111,6 +111,16 @@
     .leaflet-control-zoom a:hover { background: #F4F2EA; color: #2FAB15; }
     .rmis-row-active { background: #E8F7E3; }
 
+    /* Map markers (divIcon) — halo + soft shadow, scale on hover/select */
+    .rmis-pin { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+                transition: transform 0.15s ease; transform-origin: center; }
+    .rmis-pin .shape { width: 15px; height: 15px; box-sizing: border-box; border: 2px solid #fff;
+                       box-shadow: 0 1px 4px rgba(0,0,0,0.45); display: block; }
+    .rmis-pin .shape.dot { border-radius: 50%; }
+    .rmis-pin .shape.dia { border-radius: 3px; transform: rotate(45deg); }
+    .rmis-pin.active { transform: scale(1.45); }
+    .rmis-pin.active .shape { box-shadow: 0 2px 8px rgba(0,0,0,0.55); }
+
     /* Scrollbar styling */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -594,6 +604,13 @@ function InfraMiniCard({infra, onClick}) {
 }
 
 // ============= MAP TAB =============
+// Build a divIcon marker: dot = infrastructure, diamond = activity.
+const makeMarkerIcon = (color, shape) => L.divIcon({
+  className: '',
+  html: `<div class="rmis-pin"><span class="shape ${shape}" style="background:${color}"></span></div>`,
+  iconSize: [24, 24], iconAnchor: [12, 12], tooltipAnchor: [0, -10],
+});
+
 function MapTab({setLightbox}) {
   const mapEl = useRef(null);
   const mapRef = useRef(null);
@@ -601,68 +618,88 @@ function MapTab({setLightbox}) {
   const [hoveredId, setHoveredId] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
 
-  const points = useMemo(() => DATA.infrastructures
-    .filter(i => i.lat && i.lon)
-    .map(r => ({
-      ...r,
-      missionCount: missionsFor(r.caseid).length,
-      photoCount: missionsFor(r.caseid).reduce((s, m) => s + photosFor(m.ID_gen).length, 0),
-    })), []);
+  // Unified point model — infrastructures (dots) + activities (diamonds)
+  const points = useMemo(() => {
+    const infra = DATA.infrastructures
+      .filter(i => i.lat && i.lon)
+      .map(r => {
+        const meta = TYPE_META[r.type_infrastructure] || {color: '#7A7668', label: r.type_infrastructure};
+        return {
+          id: r.caseid, kind: 'infra', shape: 'dot', lat: r.lat, lon: r.lon,
+          name: r.name, color: meta.color, typeLabel: meta.label,
+          commune: r.commune, cercle: r.cercle,
+          missionCount: missionsFor(r.caseid).length,
+          photoCount: missionsFor(r.caseid).reduce((s, m) => s + photosFor(m.ID_gen).length, 0),
+        };
+      });
+    const acts = ACTIVITIES
+      .filter(a => a.lat && a.lon)
+      .map(a => {
+        const km = KIND_META[a.kind] || KIND_META.formation;
+        const geo = actGeography(a);
+        return {
+          id: a.caseid, kind: a.kind, shape: 'dia', lat: a.lat, lon: a.lon,
+          name: a.titre || km.label, color: km.color, typeLabel: km.label,
+          commune: geo.commune, cercle: geo.cercle,
+          date: a.date, participants: a.participants,
+          photoCount: actPhotosFor(a.caseid).length,
+        };
+      });
+    return [...infra, ...acts];
+  }, []);
 
-  const grouped = Object.entries(TYPE_META).map(([k, meta]) => ({
-    key: k, meta, points: points.filter(p => p.type_infrastructure === k)
-  })).filter(g => g.points.length > 0);
+  // Legend groups: infrastructure types, then activity kinds
+  const infraGroups = Object.entries(TYPE_META).map(([k, meta]) => ({
+    key: k, meta, count: points.filter(p => p.kind === 'infra' && DATA.infrastructures.find(i => i.caseid === p.id)?.type_infrastructure === k).length
+  })).filter(g => g.count > 0);
+  const actGroups = Object.entries(KIND_META).map(([k, meta]) => ({
+    key: k, meta, count: points.filter(p => p.kind === k).length
+  })).filter(g => g.count > 0);
 
   // Initialise the Leaflet map once
   useEffect(() => {
     if (!mapEl.current || mapRef.current || typeof L === 'undefined') return;
 
-    const map = L.map(mapEl.current, {
-      zoomControl: true,
-      scrollWheelZoom: true,
-      preferCanvas: true,
-    });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    const map = L.map(mapEl.current, {zoomControl: true, scrollWheelZoom: true});
+    // CartoDB Voyager — warm land, water, roads + place labels (much less white)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd', maxZoom: 19,
     }).addTo(map);
     L.control.scale({imperial: false, position: 'bottomleft'}).addTo(map);
 
     if (points.length > 0) {
-      const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
-      map.fitBounds(bounds, {padding: [50, 50]});
+      map.fitBounds(L.latLngBounds(points.map(p => [p.lat, p.lon])), {padding: [50, 50]});
     } else {
       map.setView([13.8, -10.5], 7);
     }
 
     points.forEach(p => {
-      const meta = TYPE_META[p.type_infrastructure] || {color: '#7A7668', label: p.type_infrastructure};
-      const marker = L.circleMarker([p.lat, p.lon], {
-        radius: 7,
-        fillColor: meta.color,
-        color: 'white',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 1,
-      }).addTo(map);
+      const marker = L.marker([p.lat, p.lon], {icon: makeMarkerIcon(p.color, p.shape)}).addTo(map);
 
-      const tipHtml = `
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:#1A1A17">${p.name}</div>
-        <div style="color:${meta.color};font-weight:500;margin-top:3px;font-size:11px">${meta.label}</div>
-        <div style="color:#5A5A54;margin-top:1px;font-size:11px">${prettyCommune(p.commune)} · ${prettyCercle(p.cercle)}</div>
+      const head = p.kind === 'infra'
+        ? `<div style="color:${p.color};font-weight:500;margin-top:3px;font-size:11px">${p.typeLabel}</div>`
+        : `<div style="color:${p.color};font-weight:500;margin-top:3px;font-size:11px">${p.typeLabel}${p.date ? ' · ' + p.date : ''}</div>`;
+      const stat = p.kind === 'infra'
+        ? `${p.missionCount} visite${p.missionCount > 1 ? 's' : ''} · ${p.photoCount} photo${p.photoCount > 1 ? 's' : ''}`
+        : `${p.participants != null ? p.participants + ' participant' + (p.participants > 1 ? 's' : '') + ' · ' : ''}${p.photoCount} photo${p.photoCount > 1 ? 's' : ''}`;
+      const geoLine = (p.commune || p.cercle)
+        ? `<div style="color:#5A5A54;margin-top:1px;font-size:11px">${[p.commune && prettyCommune(p.commune), p.cercle && prettyCercle(p.cercle)].filter(Boolean).join(' · ')}</div>`
+        : '';
+      marker.bindTooltip(`
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:#1A1A17;max-width:220px">${p.name}</div>
+        ${head}${geoLine}
         <div style="font-family:'IBM Plex Mono',monospace;color:#5A5A54;font-size:10px;margin-top:6px;padding-top:6px;border-top:1px solid #E0DED6">
           ${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°
         </div>
-        <div style="font-size:11px;color:#5A5A54;margin-top:4px">
-          ${p.missionCount} visite${p.missionCount > 1 ? 's' : ''} · ${p.photoCount} photo${p.photoCount > 1 ? 's' : ''}
-        </div>`;
-      marker.bindTooltip(tipHtml, {direction: 'top', offset: [0, -8], className: 'rmis-tip', sticky: false});
+        <div style="font-size:11px;color:#5A5A54;margin-top:4px">${stat}</div>`,
+        {direction: 'top', className: 'rmis-tip', sticky: false});
 
-      marker.on('mouseover', () => setHoveredId(p.caseid));
+      marker.on('mouseover', () => setHoveredId(p.id));
       marker.on('mouseout',  () => setHoveredId(null));
-      marker.on('click',     () => setSelectedId(p.caseid));
+      marker.on('click',     () => setSelectedId(p.id));
 
-      markersRef.current[p.caseid] = marker;
+      markersRef.current[p.id] = marker;
     });
 
     mapRef.current = map;
@@ -673,59 +710,75 @@ function MapTab({setLightbox}) {
     };
   }, []);
 
-  // Highlight active marker on hover/select
+  // Highlight active marker on hover/select (toggle CSS class + raise z-index)
   useEffect(() => {
     Object.entries(markersRef.current).forEach(([id, marker]) => {
+      const el = marker.getElement();
+      const pin = el && el.querySelector('.rmis-pin');
       const isActive = id === hoveredId || id === selectedId;
-      marker.setStyle({radius: isActive ? 10 : 7, weight: isActive ? 3 : 2});
-      if (isActive) marker.bringToFront();
+      if (pin) pin.classList.toggle('active', isActive);
+      marker.setZIndexOffset(isActive ? 1000 : 0);
     });
   }, [hoveredId, selectedId]);
 
   const focusSite = (p) => {
-    setSelectedId(p.caseid);
+    setSelectedId(p.id);
     const map = mapRef.current;
-    const marker = markersRef.current[p.caseid];
+    const marker = markersRef.current[p.id];
     if (map && marker) {
       map.setView([p.lat, p.lon], Math.max(map.getZoom(), 11), {animate: true});
       marker.openTooltip();
     }
   };
 
+  const LegendRow = ({color, shape, icon, label, count}) => (
+    <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+      <div style={{width: 12, height: 12, background: color, border: '2px solid white', boxShadow: '0 0 0 1px ' + color, flexShrink: 0,
+                   borderRadius: shape === 'dot' ? '50%' : 3, transform: shape === 'dia' ? 'rotate(45deg)' : 'none'}} />
+      {icon && <Icon name={icon} size={14} color={color} style={{flexShrink: 0}} />}
+      <div style={{flex: 1, fontSize: 12, color: B.ink}}>{label}</div>
+      <div className="font-mono" style={{fontSize: 12, color: B.inkMuted}}>{count}</div>
+    </div>
+  );
+
   return (
     <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16}}>
-      <Panel title="Carte géographique" subtitle="Coordonnées GPS capturées sur le terrain · régions de Kayes (nord) et Kita (sud)">
-        <div ref={mapEl} style={{height: 540, marginTop: 12, background: '#FAF8F2', border: `1px solid ${B.line}`, borderRadius: 4, overflow: 'hidden'}} />
+      <Panel title="Carte géographique" subtitle={`Coordonnées GPS capturées sur le terrain · ${points.filter(p=>p.kind==='infra').length} infrastructures${actGroups.length ? ' + ' + points.filter(p=>p.kind!=='infra').length + ' activités' : ''} · régions de Kayes & Kita`}>
+        <div ref={mapEl} style={{height: 540, marginTop: 12, background: '#E8EEF2', border: `1px solid ${B.line}`, borderRadius: 4, overflow: 'hidden'}} />
       </Panel>
 
       <div style={{display: 'grid', gap: 16, alignContent: 'start'}}>
         <Panel title="Légende">
           <div style={{marginTop: 8, display: 'grid', gap: 8}}>
-            {grouped.map(g => (
-              <div key={g.key} style={{display: 'flex', alignItems: 'center', gap: 10}}>
-                <div style={{width: 12, height: 12, borderRadius: '50%', background: g.meta.color, border: '2px solid white', boxShadow: '0 0 0 1px ' + g.meta.color, flexShrink: 0}} />
-                <Icon name={TYPE_ICON[g.key]} size={14} color={g.meta.color} style={{flexShrink: 0}} />
-                <div style={{flex: 1, fontSize: 12, color: B.ink}}>{g.meta.label}</div>
-                <div className="font-mono" style={{fontSize: 12, color: B.inkMuted}}>{g.points.length}</div>
-              </div>
+            {infraGroups.map(g => (
+              <LegendRow key={g.key} color={g.meta.color} shape="dot" icon={TYPE_ICON[g.key]} label={g.meta.label} count={g.count} />
             ))}
+            {actGroups.length > 0 && (
+              <div style={{marginTop: 4, paddingTop: 8, borderTop: `1px solid ${B.lineLight}`, display: 'grid', gap: 8}}>
+                <div style={{fontSize: 10, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em'}}>Activités & formations</div>
+                {actGroups.map(g => (
+                  <LegendRow key={g.key} color={g.meta.color} shape="dia" icon={g.meta.icon} label={g.meta.label} count={g.count} />
+                ))}
+              </div>
+            )}
           </div>
         </Panel>
 
-        <Panel title="Liste des sites" subtitle="Survolez ou cliquez pour cibler le point sur la carte">
+        <Panel title="Points cartographiés" subtitle="Survolez ou cliquez pour cibler le point sur la carte">
           <div style={{marginTop: 8, display: 'grid', gap: 2, maxHeight: 320, overflowY: 'auto'}}>
             {points.map(p => {
-              const active = p.caseid === selectedId || p.caseid === hoveredId;
+              const active = p.id === selectedId || p.id === hoveredId;
               return (
-                <div key={p.caseid}
-                     onMouseEnter={() => setHoveredId(p.caseid)}
+                <div key={p.id}
+                     onMouseEnter={() => setHoveredId(p.id)}
                      onMouseLeave={() => setHoveredId(null)}
                      onClick={() => focusSite(p)}
                      className={active ? 'rmis-row-active' : ''}
                      style={{padding: '6px 8px', borderRadius: 3, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', transition: 'background 0.12s'}}>
-                  <div style={{width: 8, height: 8, borderRadius: '50%', background: TYPE_META[p.type_infrastructure].color, flexShrink: 0}} />
+                  <div style={{width: 8, height: 8, background: p.color, flexShrink: 0,
+                               borderRadius: p.shape === 'dot' ? '50%' : 2, transform: p.shape === 'dia' ? 'rotate(45deg)' : 'none'}} />
                   <div className="font-mono" style={{color: B.ink, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{p.name}</div>
-                  <div style={{color: B.inkMuted, fontSize: 10}}>{prettyCommune(p.commune)}</div>
+                  <div style={{color: B.inkMuted, fontSize: 10}}>{p.commune ? prettyCommune(p.commune) : ''}</div>
                 </div>
               );
             })}
