@@ -252,7 +252,12 @@ logo_b64 = encode_logo(LOGO_PATH)
 # ── 4. build HTML ─────────────────────────────────────────────────────
 print("\n🔨 Génération du HTML...")
 
-today = datetime.now().strftime("%d %B %Y")
+# French month names — avoids relying on the (unreliable) system locale on Windows
+FR_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+             'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+_now = datetime.now()
+today = f"{_now.day} {FR_MONTHS[_now.month - 1]} {_now.year}"          # e.g. "3 juin 2026"
+header_date = f"{FR_MONTHS[_now.month - 1].capitalize()} {_now.year}"  # e.g. "Juin 2026" (header)
 approved = sum(1 for r in mis_records if r.get('statut_mission') == 'approuvee')
 
 data_json   = json.dumps({"infrastructures": inf_records, "missions": mis_records,
@@ -273,6 +278,7 @@ html = html.replace("__LOGO_B64__",    logo_b64)
 html = html.replace("__DATA_JSON__",   data_json)
 html = html.replace("__PHOTOS_JSON__", photos_json)
 html = html.replace("__ACT_PHOTOS_JSON__", act_photos_json)
+html = html.replace("__HEADER_DATE__", header_date)
 html = html.replace("__UPDATE_DATE__", today)
 html = html.replace("__NB_INFRA__",    str(len(inf_records)))
 html = html.replace("__NB_MISSION__",  str(len(mis_records)))
