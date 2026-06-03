@@ -57,11 +57,15 @@ LOGO_PATH  = BASE_DIR / "whh_logo.png"
 OUTPUT     = BASE_DIR / "index.html"
 
 # ── helpers ───────────────────────────────────────────────────────────
-def find_latest(folder, pattern):
-    """Find the most recently modified xlsx matching pattern."""
-    files = sorted(folder.glob(f"*{pattern}*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+def find_latest(folder, pattern, required=True):
+    """Find the most recently modified xlsx matching pattern (ignores Excel ~$ lock files)."""
+    files = sorted(
+        [f for f in folder.glob(f"*{pattern}*.xlsx") if not f.name.startswith("~$")],
+        key=lambda f: f.stat().st_mtime, reverse=True)
     if not files:
-        raise FileNotFoundError(f"Aucun fichier '{pattern}' trouvé dans {folder}/")
+        if required:
+            raise FileNotFoundError(f"Aucun fichier '{pattern}' trouvé dans {folder}/")
+        return None
     print(f"  ✓ {files[0].name}")
     return files[0]
 
@@ -140,33 +144,106 @@ for r in mis_records:
 
 print(f"  ✓ {len(inf_records)} infrastructures, {len(mis_records)} missions")
 
+# ── 1b. load activity record types (formations + transversales) ───────
+# Both are children/companions of infrastructure but use DIFFERENT column
+# names, so we normalise them into one common "activity" schema.
+# Photos for these are named by caseid (UUID), not by M-id.
+def txt(v):
+    if v is None: return None
+    s = str(v).strip()
+    return None if s in ('', '---', 'nan', 'NaT') else s
+
+def load_activities(path, kind):
+    df = pd.read_excel(path, sheet_name="Cases")
+    cols = set(df.columns)
+    recs = []
+    for _, row in df.iterrows():
+        g = lambda c: txt(row[c]) if c in cols else None
+        lat, lon = parse_gps(g('localisation_de_levenement'))
+        if kind == 'formation':
+            titre  = g('nom_formation')
+            date   = g('date_de_la_formation')
+            statut = g('statut_formation')
+            auteur = g('cree_formation')
+        else:  # transversale
+            titre  = g('nom_activite')
+            date   = g('date_activite') or g('date_creation')
+            statut = g('statut') or g('statut_mission')
+            auteur = g('cree_activite')
+        npart = g('nombre_de_participants')
+        try: npart = int(float(npart)) if npart is not None else None
+        except (ValueError, TypeError): pass
+        recs.append({
+            'caseid':       str(row['caseid']),
+            'kind':         kind,
+            'titre':        titre,
+            'type':         g('type_de_formation'),
+            'objectifs':    g('objectifs_de_la_formation'),
+            'date':         (date or '')[:10] or None,
+            'groupe_cible': g('groupe_cible'),
+            'participants': npart,
+            'lat':          lat,
+            'lon':          lon,
+            'commune':      g('commune'),
+            'cercle':       g('cercle'),
+            'region':       g('region'),
+            'statut':       statut,
+            'parent_caseid': g('indices.mli1159_infrastructure'),
+            'auteur':       auteur,
+            'comments': {
+                'evenement':    g('commentaire_photo_evenement'),
+                'participants': g('commentaire_photo_liste_participants'),
+                'programme':    g('commentaire_photo_programme_formation'),
+                'famille':      g('commentaire_photo_de_famille'),
+            },
+        })
+    return recs
+
+formations, transversales = [], []
+form_path = find_latest(EXPORTS, "formation", required=False)
+if form_path:
+    formations = load_activities(form_path, 'formation')
+trans_path = find_latest(EXPORTS, "transversale", required=False)
+if trans_path:
+    transversales = load_activities(trans_path, 'transversale')
+
+print(f"  ✓ {len(formations)} formations, {len(transversales)} activités transversales")
+
 # ── 2. load photos ────────────────────────────────────────────────────
 print("\n📸 Chargement des photos...")
 PHOTOS_DIR.mkdir(exist_ok=True)
-photo_map = {}  # mission_id → [data_uri, ...]
+photo_map = {}      # mission ID_gen (M#####)  → [data_uri, ...]
+act_photo_map = {}  # activity caseid (UUID)   → [data_uri, ...]
 
 if not any(PHOTOS_DIR.glob("*.jpg")) and not any(PHOTOS_DIR.glob("*.jpeg")):
     print("  ⚠ Aucune photo trouvée dans photos/. Le dashboard n'affichera pas de photos.")
-    print("    Convention de nommage attendue : M42860_photo1.jpg, M42860_photo2.jpg, etc.")
+    print("    Conventions : missions → M42860_photo1.jpg · activités → {caseid}_photo1.jpg")
 else:
     photo_files = sorted([
         f for f in PHOTOS_DIR.iterdir()
         if f.suffix.lower() in ['.jpg', '.jpeg', '.png']
     ])
     for f in photo_files:
-        match = re.search(r'(M\d+)', f.name)
+        # Prefix = everything before "_phot" (tolerates the "_phot1" typo too).
+        match = re.match(r'(.+?)_phot', f.name)
         if not match:
-            print(f"  ⚠ Ignoré (pas d'ID mission) : {f.name}")
+            print(f"  ⚠ Ignoré (nom hors convention) : {f.name}")
             continue
-        mid = match.group(1)
+        prefix = match.group(1)
         try:
             uri = encode_photo(f)
-            photo_map.setdefault(mid, []).append(uri)
         except Exception as e:
             print(f"  ⚠ Erreur lecture {f.name}: {e}")
+            continue
+        if re.fullmatch(r'M\d+', prefix):       # mission photo
+            photo_map.setdefault(prefix, []).append(uri)
+        else:                                    # activity photo (caseid)
+            act_photo_map.setdefault(prefix, []).append(uri)
 
     total = sum(len(v) for v in photo_map.values())
-    print(f"  ✓ {total} photos pour {len(photo_map)} missions")
+    act_total = sum(len(v) for v in act_photo_map.values())
+    print(f"  ✓ {total} photos de mission pour {len(photo_map)} missions")
+    print(f"  ✓ {act_total} photos d'activité pour {len(act_photo_map)} activités")
 
 # ── 3. encode logo ────────────────────────────────────────────────────
 print("\n🎨 Chargement du logo...")
@@ -178,8 +255,10 @@ print("\n🔨 Génération du HTML...")
 today = datetime.now().strftime("%d %B %Y")
 approved = sum(1 for r in mis_records if r.get('statut_mission') == 'approuvee')
 
-data_json   = json.dumps({"infrastructures": inf_records, "missions": mis_records}, ensure_ascii=False)
-photos_json = json.dumps(photo_map, ensure_ascii=False)
+data_json   = json.dumps({"infrastructures": inf_records, "missions": mis_records,
+                          "formations": formations, "transversales": transversales}, ensure_ascii=False)
+photos_json     = json.dumps(photo_map, ensure_ascii=False)
+act_photos_json = json.dumps(act_photo_map, ensure_ascii=False)
 
 # Read the HTML template
 template_path = BASE_DIR / "template.html"
@@ -193,6 +272,7 @@ html = template_path.read_text(encoding='utf-8')
 html = html.replace("__LOGO_B64__",    logo_b64)
 html = html.replace("__DATA_JSON__",   data_json)
 html = html.replace("__PHOTOS_JSON__", photos_json)
+html = html.replace("__ACT_PHOTOS_JSON__", act_photos_json)
 html = html.replace("__UPDATE_DATE__", today)
 html = html.replace("__NB_INFRA__",    str(len(inf_records)))
 html = html.replace("__NB_MISSION__",  str(len(mis_records)))
@@ -204,6 +284,7 @@ size_mb = OUTPUT.stat().st_size / 1024 / 1024
 print(f"\n✅ Dashboard généré : {OUTPUT.name}")
 print(f"   Taille : {size_mb:.1f} MB")
 print(f"   Données : {len(inf_records)} infrastructures · {len(mis_records)} missions · {approved} approuvées")
-print(f"   Photos  : {sum(len(v) for v in photo_map.values())} photos pour {len(photo_map)} missions")
+print(f"   Activités : {len(formations)} formations · {len(transversales)} transversales")
+print(f"   Photos  : {sum(len(v) for v in photo_map.values())} de mission · {sum(len(v) for v in act_photo_map.values())} d'activité")
 print(f"\n📤 Partagez ce fichier avec vos partenaires :")
 print(f"   {OUTPUT.absolute()}\n")

@@ -137,6 +137,7 @@
     const WHH_LOGO = "__LOGO_B64__";
     const DATA = __DATA_JSON__;
     const PHOTOS = __PHOTOS_JSON__;
+    const ACT_PHOTOS = __ACT_PHOTOS_JSON__;
   </script>
 
   <!-- React component -->
@@ -217,8 +218,49 @@ const TYPE_ICON = {
 
 // Helper: get photos for a mission ID_gen
 const photosFor = (idGen) => PHOTOS[idGen] || [];
+// Helper: get photos for an activity caseid
+const actPhotosFor = (caseid) => ACT_PHOTOS[caseid] || [];
 // Helper: mission list for an infra caseid
 const missionsFor = (caseid) => DATA.missions.filter(m => m.parent_caseid === caseid);
+
+// ============= ACTIVITY META (formations + transversales) =============
+const ACTIVITIES = [...(DATA.formations || []), ...(DATA.transversales || [])];
+
+// Visual identity per activity kind
+const KIND_META = {
+  formation:    { label: "Formation",              short: "Formation",    color: '#2F8FAB', icon: 'users'  },
+  transversale: { label: "Activité transversale",  short: "Transversale", color: '#8A5CB8', icon: 'layers' },
+};
+
+// Friendly labels for the type_de_formation field (fallback = prettify)
+const ACT_TYPE_LABEL = {
+  autre_infra:           "Autre (infrastructure)",
+  autre_trans:           "Autre (transversale)",
+  appui_decentralisation: "Appui à la décentralisation",
+};
+
+// Status labels shared by both kinds
+const ACT_STATUS = {
+  approuvee:            { label: "Approuvée",                color: '#2FAB15' },
+  attente_approbation:  { label: "En attente d'approbation", color: '#B8820C' },
+  verified:             { label: "En vérification",          color: '#B8820C' },
+  rejetee:              { label: "Rejetée",                   color: '#B5362A' },
+};
+
+const prettyGroupe = s => (s||'').split(/\s+/).filter(Boolean)
+  .map(g => g.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())).join(' · ');
+
+// Best available geography for an activity: its own, else its parent infra's.
+const actGeography = (a) => {
+  const parent = a.parent_caseid && DATA.infrastructures.find(i => i.caseid === a.parent_caseid);
+  const human = v => v && !/^[0-9a-f]{20,}$/i.test(v) ? v : null; // skip location-code UUIDs
+  return {
+    commune: human(a.commune) || (parent && parent.commune) || null,
+    cercle:  a.cercle || (parent && parent.cercle) || null,
+    region:  a.region || (parent && parent.region) || null,
+    parent,
+  };
+};
 
 // ============= MAIN APP =============
 function App() {
@@ -226,6 +268,7 @@ function App() {
   const [lightbox, setLightbox] = useState(null); // {src, caption}
   const [selectedInfra, setSelectedInfra] = useState(null);
   const [missionFilter, setMissionFilter] = useState('all');
+  const [actFilter, setActFilter] = useState('all');
 
   return (
     <div style={{background: B.paper, color: B.ink, minHeight: '100vh',
@@ -240,6 +283,7 @@ function App() {
         {tab === 'map' && <MapTab setLightbox={setLightbox} />}
         {tab === 'portfolio' && <PortfolioTab setLightbox={setLightbox} selectedInfra={selectedInfra} setSelectedInfra={setSelectedInfra} />}
         {tab === 'visits' && <VisitsTab setLightbox={setLightbox} filter={missionFilter} setFilter={setMissionFilter} />}
+        {tab === 'activities' && <ActivitiesTab setLightbox={setLightbox} filter={actFilter} setFilter={setActFilter} />}
       </div>
       <Footer />
       {lightbox && <Lightbox {...lightbox} onClose={() => setLightbox(null)} />}
@@ -281,6 +325,7 @@ function PhaseBanner() {
   const nbSites = DATA.infrastructures.length;
   const nbVisites = DATA.missions.length;
   const nbPhotos = Object.values(PHOTOS).reduce((s, a) => s + a.length, 0);
+  const nbActs = ACTIVITIES.length;
   return (
     <div style={{background: B.greenTint, borderBottom: `1px solid ${B.greenTintDeep}`}}>
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -289,7 +334,7 @@ function PhaseBanner() {
             Phase de référence — documentation avant travaux
           </div>
           <div style={{color: B.greenDark, fontSize: 13, marginTop: 4, maxWidth: 720}}>
-            {nbSites} site{nbSites > 1 ? 's' : ''} catalogué{nbSites > 1 ? 's' : ''} · {nbVisites} visite{nbVisites > 1 ? 's' : ''} de terrain réalisée{nbVisites > 1 ? 's' : ''} · {nbPhotos} photo{nbPhotos > 1 ? 's' : ''} documentaire{nbPhotos > 1 ? 's' : ''} collectée{nbPhotos > 1 ? 's' : ''}.
+            {nbSites} site{nbSites > 1 ? 's' : ''} catalogué{nbSites > 1 ? 's' : ''} · {nbVisites} visite{nbVisites > 1 ? 's' : ''} de terrain réalisée{nbVisites > 1 ? 's' : ''} · {nbPhotos} photo{nbPhotos > 1 ? 's' : ''} documentaire{nbPhotos > 1 ? 's' : ''} collectée{nbPhotos > 1 ? 's' : ''}{nbActs > 0 ? ` · ${nbActs} activité${nbActs > 1 ? 's' : ''} & formation${nbActs > 1 ? 's' : ''}` : ''}.
             Démarrage des travaux prévu à l'issue de l'approbation finale des dossiers par les autorités locales.
           </div>
         </div>
@@ -337,6 +382,7 @@ function TabBar({tab, setTab}) {
     {id: 'portfolio', label: `Les ${DATA.infrastructures.length} infrastructures`},
     {id: 'visits', label: "Visites terrain & photos"},
   ];
+  if (ACTIVITIES.length > 0) tabs.push({id: 'activities', label: `Activités & formations (${ACTIVITIES.length})`});
   return (
     <div className="flex" style={{gap: 32, borderBottom: `1px solid ${B.line}`, marginTop: 8}}>
       {tabs.map(t => (
@@ -893,6 +939,163 @@ function MissionCard({mission, setLightbox}) {
   );
 }
 
+// ============= ACTIVITIES TAB (formations + transversales) =============
+function ActivitiesTab({setLightbox, filter, setFilter}) {
+  const nForm  = (DATA.formations || []).length;
+  const nTrans = (DATA.transversales || []).length;
+  const list = ACTIVITIES
+    .filter(a => filter === 'all' || a.kind === filter)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  return (
+    <div style={{display: 'grid', gap: 16}}>
+      {/* Filter bar */}
+      <div style={{display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: B.paperDeep, border: `1px solid ${B.line}`, borderRadius: 4}}>
+        <Icon name="filter" size={14} color={B.inkMuted} />
+        <span style={{fontSize: 11, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.08em'}}>Type d'activité</span>
+        <button onClick={() => setFilter('all')} className={filter === 'all' ? 'chip-a' : 'chip'}>Toutes ({ACTIVITIES.length})</button>
+        <button onClick={() => setFilter('formation')} className={filter === 'formation' ? 'chip-a' : 'chip'}>Formations ({nForm})</button>
+        <button onClick={() => setFilter('transversale')} className={filter === 'transversale' ? 'chip-a' : 'chip'}>Transversales ({nTrans})</button>
+        <div style={{marginLeft: 'auto', fontSize: 12, color: B.inkMuted}}>
+          <span style={{color: B.ink, fontWeight: 600}}>{list.length}</span> activité{list.length > 1 ? 's' : ''} affichée{list.length > 1 ? 's' : ''}
+        </div>
+      </div>
+
+      {list.length === 0 ? (
+        <div style={{padding: 40, textAlign: 'center', background: B.paperDeep, borderRadius: 6, border: `1px dashed ${B.line}`, color: B.inkMuted, fontSize: 13}}>
+          Aucune activité pour ce filtre.
+        </div>
+      ) : (
+        <div style={{display: 'grid', gap: 12}}>
+          {list.map(a => <ActivityCard key={a.caseid} activity={a} setLightbox={setLightbox} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActivityCard({activity, setLightbox}) {
+  const kind = KIND_META[activity.kind] || KIND_META.formation;
+  const photos = actPhotosFor(activity.caseid);
+  const geo = actGeography(activity);
+  const st = ACT_STATUS[activity.statut] || (activity.statut ? {label: prettyName(activity.statut), color: B.inkMuted} : null);
+  const typeLabel = activity.type ? (ACT_TYPE_LABEL[activity.type] || prettyName(activity.type)) : null;
+
+  // Named field comments, shown as a small "field notes" block
+  const commentLabels = {evenement: "Événement", participants: "Liste des participants", programme: "Programme", famille: "Photo de famille"};
+  const comments = Object.entries(activity.comments || {})
+    .filter(([, v]) => v && String(v).trim())
+    .map(([k, v]) => ({label: commentLabels[k] || k, text: v}));
+
+  const gallery = photos.map(src => ({src, caption: activity.titre}));
+
+  return (
+    <div style={{background: 'white', border: `1px solid ${B.line}`, borderRadius: 6, padding: 20}}>
+      <div style={{display: 'flex', gap: 20}}>
+        {/* Left: meta */}
+        <div style={{width: 240, flexShrink: 0}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap'}}>
+            <div style={{padding: '2px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: kind.color + '22', color: kind.color, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4}}>
+              <Icon name={kind.icon} size={10} color={kind.color} />{kind.short}
+            </div>
+            {st && <div style={{padding: '2px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: st.color + '22', color: st.color, textTransform: 'uppercase', letterSpacing: '0.05em'}}>{st.label}</div>}
+          </div>
+
+          <div className="font-display" style={{fontSize: 16, fontWeight: 600, color: B.ink, marginTop: 8, lineHeight: 1.25}}>
+            {activity.titre || '(sans titre)'}
+          </div>
+
+          {typeLabel && <div style={{fontSize: 11, color: kind.color, marginTop: 4}}>{typeLabel}</div>}
+
+          {activity.date && (
+            <div style={{fontSize: 11, color: B.inkMuted, marginTop: 8}}>
+              <Icon name="calendar" size={10} style={{display: 'inline', verticalAlign: -1, marginRight: 4}} color={B.inkMuted} />
+              {activity.date}
+            </div>
+          )}
+          {activity.participants != null && (
+            <div style={{fontSize: 11, color: B.inkMuted, marginTop: 3}}>
+              <Icon name="users" size={10} style={{display: 'inline', verticalAlign: -1, marginRight: 4}} color={B.inkMuted} />
+              {activity.participants} participant{activity.participants > 1 ? 's' : ''}
+            </div>
+          )}
+          {(geo.commune || geo.cercle) && (
+            <div style={{fontSize: 11, color: B.inkMuted, marginTop: 3}}>
+              <Icon name="pin" size={10} style={{display: 'inline', verticalAlign: -1, marginRight: 4}} color={B.inkMuted} />
+              {[geo.commune && prettyCommune(geo.commune), geo.cercle && prettyCercle(geo.cercle)].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          {activity.auteur && (
+            <div style={{fontSize: 11, color: B.inkMuted, marginTop: 3}}>Saisi par {activity.auteur}</div>
+          )}
+
+          {activity.groupe_cible && (
+            <div style={{marginTop: 12}}>
+              <div style={{fontSize: 10, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em'}}>Groupe cible</div>
+              <div style={{fontSize: 12, color: B.ink, marginTop: 3}}>{prettyGroupe(activity.groupe_cible)}</div>
+            </div>
+          )}
+
+          {geo.parent && (
+            <div style={{marginTop: 12, padding: 10, background: kind.color + '10', borderRadius: 4, borderLeft: `3px solid ${kind.color}`}}>
+              <div style={{fontSize: 10, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em'}}>Infrastructure liée</div>
+              <div className="font-mono" style={{fontSize: 12, color: B.ink, fontWeight: 600, marginTop: 2}}>{geo.parent.name}</div>
+              {TYPE_META[geo.parent.type_infrastructure] && (
+                <div style={{fontSize: 11, color: TYPE_META[geo.parent.type_infrastructure].color, marginTop: 2}}>{TYPE_META[geo.parent.type_infrastructure].label}</div>
+              )}
+            </div>
+          )}
+
+          {activity.objectifs && (
+            <div style={{marginTop: 12}}>
+              <div style={{fontSize: 10, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em'}}>Objectif</div>
+              <div style={{fontSize: 12, color: B.ink, marginTop: 3, fontStyle: 'italic'}}>« {activity.objectifs} »</div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: photos + field notes */}
+        <div style={{flex: 1}}>
+          {photos.length > 0 ? (
+            <div>
+              <div style={{fontSize: 11, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em', marginBottom: 8}}>
+                Documentation photographique · {photos.length} photo{photos.length > 1 ? 's' : ''}
+              </div>
+              <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10}}>
+                {photos.map((p, i) => (
+                  <div key={i} style={{cursor: 'pointer'}} onClick={() => setLightbox({src: p, caption: activity.titre, gallery})}>
+                    <img src={p} style={{width: '100%', height: 150, objectFit: 'cover', borderRadius: 4, border: `1px solid ${B.line}`, transition: 'transform 0.2s'}}
+                         onMouseEnter={e => e.target.style.transform = 'scale(1.02)'}
+                         onMouseLeave={e => e.target.style.transform = 'scale(1)'} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{padding: 30, textAlign: 'center', background: B.paperDeep, borderRadius: 4, border: `1px dashed ${B.line}`, color: B.inkMuted, fontSize: 12}}>
+              <Icon name="camera" size={20} color={B.inkMuted} style={{opacity: 0.5}} />
+              <div style={{marginTop: 8}}>Aucune photo téléchargée pour cette activité</div>
+            </div>
+          )}
+
+          {comments.length > 0 && (
+            <div style={{marginTop: 14}}>
+              <div style={{fontSize: 11, textTransform: 'uppercase', color: B.inkMuted, letterSpacing: '0.06em', marginBottom: 6}}>Commentaires terrain</div>
+              <div style={{display: 'grid', gap: 6}}>
+                {comments.map((c, i) => (
+                  <div key={i} style={{fontSize: 12, color: B.ink, lineHeight: 1.4}}>
+                    <span style={{color: B.inkMuted}}>{c.label} :</span> <span style={{fontStyle: 'italic'}}>« {c.text} »</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ============= LIGHTBOX =============
 function Lightbox({src, caption, onClose}) {
   useEffect(() => {
@@ -924,7 +1127,7 @@ function Footer() {
       <div className="max-w-7xl mx-auto px-6 py-5" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: B.inkMuted}}>
         <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
           <Icon name="layers" size={12} color={B.inkMuted} />
-          Prototype de visualisation · Données extraites de CommCare HQ (serveur EU) · {DATA.infrastructures.length} infrastructures · {DATA.missions.length} visites · {Object.values(PHOTOS).reduce((s,a)=>s+a.length,0)} photos
+          Prototype de visualisation · Données extraites de CommCare HQ (serveur EU) · {DATA.infrastructures.length} infrastructures · {DATA.missions.length} visites · {ACTIVITIES.length} activités · {Object.values(PHOTOS).reduce((s,a)=>s+a.length,0) + Object.values(ACT_PHOTOS).reduce((s,a)=>s+a.length,0)} photos
         </div>
         <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
           <span className="font-mono">MLI 1159 · KFW</span>
