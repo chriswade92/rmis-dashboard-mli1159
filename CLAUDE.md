@@ -15,7 +15,7 @@ git add index.html && git commit -m "update" && git push   # Vercel auto-deploys
 ```
 exports/     ← CommCare xlsx exports (infrastructure + missions + activite_formation + activity_transversale)
 photos/      ← mission photos named M{ID_gen}_photo{N}.jpg · activity photos named {caseid}_photo{N}.jpg
-template.html ← HTML/React template with __LOGO_B64__ __DATA_JSON__ __PHOTOS_JSON__ __ACT_PHOTOS_JSON__ __UPDATE_DATE__ placeholders
+template.html ← HTML/React template with __LOGO_B64__ __DATA_JSON__ __PHOTOS_JSON__ __ACT_PHOTOS_JSON__ __HEADER_DATE__ __UPDATE_DATE__ placeholders
 update.py    ← reads exports + photos → fills template → writes index.html
 index.html   ← OUTPUT (never edit manually)
 whh_logo.png ← WHH brand logo
@@ -32,7 +32,7 @@ Four CommCare case types. `caseid` is a UUID on every type; the parent link is `
 
 ## Tech stack
 - React 18 + Recharts loaded from cdnjs CDN (PropTypes must load BEFORE Recharts)
-- Leaflet 1.9.4 + CartoDB Positron basemap (Carte tab) — needs internet at view time for tiles
+- Leaflet 1.9.4 + CartoDB Voyager basemap (Carte tab) — needs internet at view time for tiles
 - Babel standalone for in-browser JSX transpilation
 - All data + photos embedded as base64 in a single self-contained HTML file (basemap tiles excepted)
 - WHH brand green: #2FAB15 | Fonts: Fraunces (display) + IBM Plex Sans + IBM Plex Mono
@@ -40,9 +40,12 @@ Four CommCare case types. `caseid` is a UUID on every type; the parent link is `
 ## Counts are dynamic
 Site/visit/photo counts in UI labels (tab bar, panel titles/subtitles, PhaseBanner sentence) MUST read from `DATA.infrastructures.length` / `DATA.missions.length` / `Object.values(PHOTOS).reduce(...)` at render time. Never hardcode a number into a label — the dashboard is regenerated each cycle as the data grows.
 
+## Header date is auto-filled
+The header month-year label uses the `__HEADER_DATE__` placeholder, filled by `update.py` from a hardcoded French month table (`FR_MONTHS`, locale-independent on Windows) → e.g. "Juin 2026". No manual edit per cycle. (`__UPDATE_DATE__` = full "3 juin 2026" string is also computed but not currently referenced in template.html.)
+
 ## Dashboard tabs
 1. Vue d'ensemble — KPIs, pie chart (type), bar chart (type × cercle), phase banner
-2. Carte — interactive Leaflet map of Mali with coloured circle markers, hover tooltips, zoom/pan, scale bar, and bidirectional hover/click sync with right-hand site list
+2. Carte — full-width (70vh) Leaflet/Voyager map of Mali. divIcon markers: circles = infrastructures (TYPE_META colours), diamonds = formations/transversales (KIND_META colours), each with white halo + drop shadow and scale-up on hover/select. Hover tooltips, zoom/pan, scale bar. Below the map: Légende (infra types + an "Activités & formations" section) and a multi-column "Points cartographiés" list with bidirectional hover/click sync.
 3. Les N infrastructures — card grid with photo thumbnails, filterable (tab label is dynamic)
 4. Visites terrain & photos — mission cards with photos + captions, lightbox on click
 5. Activités & formations — formation + transversale event cards (date, participants, groupe cible, objectives, linked infra, photo gallery + field comments, lightbox). Tab + count appear only when `ACTIVITIES.length > 0`; kind filter (Toutes / Formations / Transversales).
