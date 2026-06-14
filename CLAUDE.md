@@ -58,11 +58,11 @@ The header month-year label uses the `__HEADER_DATE__` placeholder, filled by `u
 - HIMO fields: 0/16 filled (works not started yet — show placeholder, not zeros)
 - photos/Picture1.jpg does not match M{ID}_photo{N}.jpg convention and is skipped by update.py
 
-## Current data state (3 juin 2026)
-- 19 infrastructures | 22 missions | 17/22 approuvées | 65 mission photos
-- 1 formation + 1 activité transversale | 11 activity photos (formation 7, transversale 4)
-- Regions: Kayes, Kita | Cercles: ambidedi, kayes, kita, sagabari, sebekoro
-- NOTE: the activity_transversale export is sometimes left open in Excel mid-edit (a `~$…xlsx` lock file appears + earlier test rows in region "bandiagara"). `update.py` skips `~$` files; close Excel before the final run.
+## Current data state (14 juin 2026)
+- 32 infrastructures | 39 missions | 34/39 approuvées | 116 mission photos
+- 1 formation + 9 activités transversales | 43 activity photos (formation 7, transversale 36)
+- Regions: Kayes, Kita | Cercles: ambidedi, kayes, kita, sagabari, sebekoro, sirakoro
+- NOTE: close Excel before the final run — the activity_transversale export sometimes leaves a `~$…xlsx` lock file (`update.py` skips `~$` files). Earlier "bandiagara" test rows are no longer present; regions are clean (Kayes, Kita only).
 
 ## Infrastructure types + colours
 perimetre_maraicher #4CA82E | unite_transfo #D98B2B | piste #7B5B3F
