@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 .env
+
+# Camera originals — update.py only reads jpg/jpeg/png, so these are
+# converted to .jpg and the conversions are what ship in index.html
+*.heic
