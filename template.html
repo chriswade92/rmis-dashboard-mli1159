@@ -661,10 +661,13 @@ function MapTab({setLightbox}) {
     if (!mapEl.current || mapRef.current || typeof L === 'undefined') return;
 
     const map = L.map(mapEl.current, {zoomControl: true, scrollWheelZoom: true});
-    // CartoDB Voyager — warm land, water, roads + place labels (much less white)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd', maxZoom: 19,
+    // Esri World Street Map — warm land, water, roads + place labels (much less white).
+    // Replaced CartoDB Voyager in Sept 2026: CARTO began serving "API KEY REQUIRED"
+    // watermark tiles (HTTP 200, so it fails silently rather than erroring).
+    // NOTE: Esri tile paths are {z}/{y}/{x} — y before x, unlike the XYZ convention.
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, METI, TomTom',
+      maxZoom: 19,
     }).addTo(map);
     L.control.scale({imperial: false, position: 'bottomleft'}).addTo(map);
 

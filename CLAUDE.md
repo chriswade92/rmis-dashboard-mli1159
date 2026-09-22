@@ -32,7 +32,11 @@ Four CommCare case types. `caseid` is a UUID on every type; the parent link is `
 
 ## Tech stack
 - React 18 + Recharts loaded from cdnjs CDN (PropTypes must load BEFORE Recharts)
-- Leaflet 1.9.4 + CartoDB Voyager basemap (Carte tab) — needs internet at view time for tiles
+- Leaflet 1.9.4 + Esri World Street Map basemap (Carte tab) — needs internet at view time for tiles.
+  Esri tile paths are `{z}/{y}/{x}` (y before x), unlike the usual XYZ convention.
+  Replaced CartoDB Voyager in Sept 2026 when CARTO began requiring an API key — it serves a
+  watermarked "API KEY REQUIRED" tile with HTTP 200, so the failure is silent, not an error.
+  Do NOT switch to OpenStreetMap's own tiles: they return a 418 "Access blocked" tile for apps.
 - Babel standalone for in-browser JSX transpilation
 - All data + photos embedded as base64 in a single self-contained HTML file (basemap tiles excepted)
 - WHH brand green: #2FAB15 | Fonts: Fraunces (display) + IBM Plex Sans + IBM Plex Mono
@@ -45,7 +49,7 @@ The header month-year label uses the `__HEADER_DATE__` placeholder, filled by `u
 
 ## Dashboard tabs
 1. Vue d'ensemble — KPIs, pie chart (type), bar chart (type × cercle), phase banner
-2. Carte — full-width (70vh) Leaflet/Voyager map of Mali. divIcon markers: circles = infrastructures (TYPE_META colours), diamonds = formations/transversales (KIND_META colours), each with white halo + drop shadow and scale-up on hover/select. Hover tooltips, zoom/pan, scale bar. Below the map: Légende (infra types + an "Activités & formations" section) and a multi-column "Points cartographiés" list with bidirectional hover/click sync.
+2. Carte — full-width (70vh) Leaflet/Esri World Street Map of Mali. divIcon markers: circles = infrastructures (TYPE_META colours), diamonds = formations/transversales (KIND_META colours), each with white halo + drop shadow and scale-up on hover/select. Hover tooltips, zoom/pan, scale bar. Below the map: Légende (infra types + an "Activités & formations" section) and a multi-column "Points cartographiés" list with bidirectional hover/click sync.
 3. Les N infrastructures — card grid with photo thumbnails, filterable (tab label is dynamic)
 4. Visites terrain & photos — mission cards with photos + captions, lightbox on click
 5. Activités & formations — formation + transversale event cards (date, participants, groupe cible, objectives, linked infra, photo gallery + field comments, lightbox). Tab + count appear only when `ACTIVITIES.length > 0`; kind filter (Toutes / Formations / Transversales).
