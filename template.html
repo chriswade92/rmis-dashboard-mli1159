@@ -1124,7 +1124,7 @@ function ActivityCard({activity, setLightbox}) {
               <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10}}>
                 {photos.map((p, i) => (
                   <div key={i} style={{cursor: 'pointer'}} onClick={() => setLightbox({src: p, caption: activity.titre, gallery})}>
-                    <img src={p} style={{width: '100%', height: 150, objectFit: 'cover', borderRadius: 4, border: `1px solid ${B.line}`, transition: 'transform 0.2s'}}
+                    <img src={p} style={{width: '100%', height: 200, objectFit: 'cover', borderRadius: 4, border: `1px solid ${B.line}`, transition: 'transform 0.2s'}}
                          onMouseEnter={e => e.target.style.transform = 'scale(1.02)'}
                          onMouseLeave={e => e.target.style.transform = 'scale(1)'} />
                   </div>

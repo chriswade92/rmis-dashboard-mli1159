@@ -56,16 +56,19 @@ The header month-year label uses the `__HEADER_DATE__` placeholder, filled by `u
 6. (No data quality tab in partner-facing version)
 
 ## Known data issues (do not hide, flag them)
-- urbaine_transfo_01 appears twice (2 different sites, same name)
+- urbaine_transfo_01 appears twice — same project title, GPS only ~12 m apart, created 2 months apart (Mar/May 2026): most likely ONE site registered twice, not 2 sites
+- benkadi_maraicher_01 appears twice — same project title, GPS ~45 m apart; the 2nd case (5efd6464…, created 2026-09-24, localité "Diangola Birgo" vs "Djagola brigo") has no missions/formations: likely a re-registration
+- liberte_dembaya_marche_01 appears twice — legitimately 2 markets (Kamankolé, Diyala, ~6 km apart) under one project; only the name collides
 - Mission M42860: debut_de_la_mission = 2029 (typo, should be 2026)
 - Mission M94020: fin_de_la_mission = 2024 (typo, should be 2026)
 - HIMO fields: 0/16 filled (works not started yet — show placeholder, not zeros)
 - photos/Picture1.jpg does not match M{ID}_photo{N}.jpg convention and is skipped by update.py
 
-## Current data state (14 juin 2026)
-- 32 infrastructures | 39 missions | 34/39 approuvées | 116 mission photos
-- 1 formation + 9 activités transversales | 43 activity photos (formation 7, transversale 36)
-- Regions: Kayes, Kita | Cercles: ambidedi, kayes, kita, sagabari, sebekoro, sirakoro
+## Current data state (14 oct 2026)
+- 34 infrastructures | 39 missions | 116 mission photos
+- 42 formations + 27 activités transversales | 252 activity photos
+- Photos are embedded at max 1400 px / JPEG q85 (was 900 px / q78) → index.html ≈ 43 MB.
+  Most source photos are only 400–800 px (CommCare compresses at capture), so they can't get sharper here.
 - NOTE: close Excel before the final run — the activity_transversale export sometimes leaves a `~$…xlsx` lock file (`update.py` skips `~$` files). Earlier "bandiagara" test rows are no longer present; regions are clean (Kayes, Kita only).
 
 ## Infrastructure types + colours

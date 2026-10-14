@@ -93,7 +93,7 @@ def encode_logo(path):
     img.save(buf, format="PNG", optimize=True)
     return base64.b64encode(buf.getvalue()).decode()
 
-def encode_photo(path, max_width=900, quality=78):
+def encode_photo(path, max_width=1400, quality=85):
     img = Image.open(path)
     img = ImageOps.exif_transpose(img)
     if img.mode != 'RGB': img = img.convert('RGB')
